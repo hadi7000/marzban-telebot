@@ -2,6 +2,7 @@ import io
 import math
 import re
 import random
+import string
 from datetime import datetime
 
 import qrcode
@@ -688,7 +689,11 @@ def add_user_from_template_username_step(message: types.Message):
     with GetDB() as db:
         username = message.text
         if message.text == '🔡 Random Username':
-            username = ''.join(random.choices('abcdef0123456789', k=4))
+            characters = string.ascii_letters + '1234567890'
+            username = random.choice(characters)
+            username += ''.join(random.choices(characters, k=4)) 
+            username += '_' 
+            username += ''.join(random.choices(characters, k=4))
         match = re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-z\d]$', username)
         if not match:
             wait_msg = bot.send_message(
@@ -798,11 +803,15 @@ def add_user_username_step(message: types.Message):
         )
         return bot.register_next_step_handler(wait_msg, add_user_username_step)
     if username == '🔡 Random Username':
-        username = ''.join(random.choices('abcdef0123456789', k=4))
+        characters = string.ascii_letters + '1234567890'
+        username = random.choice(characters)
+        username += ''.join(random.choices(characters, k=4)) 
+        username += '_' 
+        username += ''.join(random.choices(characters, k=4))
     if not re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-z\d]$', username):
         wait_msg = bot.send_message(
             message.chat.id,
-            '❌ Username only can be 3 to 32 characters and contain a-z, A-Z 0-9, and underscores in between.',
+            '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.',
             reply_markup=BotKeyboard.cancel_action()
         )
         return bot.register_next_step_handler(wait_msg, add_user_username_step)
