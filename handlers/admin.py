@@ -22,7 +22,7 @@ from app.telegram.utils.custom_filters import (cb_query_equals,
                                                cb_query_startswith)
 from app.telegram.utils.keyboard import BotKeyboard
 from app.utils.store import MemoryStorage
-from app.utils.system import cpu_usage, memory_usage, readable_size, realtime_bandwidth
+from app.utils.system import cpu_usage, memory_usage, readable_size, realtime_bandwith
 
 from config import TELEGRAM_LOGGER_CHANNEL_ID, TELEGRAM_DEFAULT_VLESS_XTLS_FLOW
 
@@ -66,8 +66,8 @@ def get_system_info():
         total_users=total_users,
         active_users=users_active,
         deactivate_users=total_users - users_active,
-        up_speed=readable_size(realtime_bandwidth().outgoing_bytes),
-        down_speed=readable_size(realtime_bandwidth().outgoing_bytes)
+        up_speed=readable_size(realtime_bandwith().outgoing_bytes),
+        down_speed=readable_size(realtime_bandwith().outgoing_bytes)
     )
 
 
