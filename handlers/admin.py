@@ -1035,11 +1035,12 @@ def confirm_user_command(call: types.CallbackQuery):
             crud.update_user(db, db_user, UserModify(
                 status=UserStatusModify.disabled))
             xray.operations.remove_user(db_user)
+            user = UserResponse.from_orm(db_user)
         bot.edit_message_text(
             get_user_info_text(
                 status='disabled',
                 username=username,
-                sub_url=db_user.subscription_url,
+                sub_url=user.subscription_url,
                 data_limit=db_user.data_limit,
                 usage=db_user.used_traffic,
                 expire=db_user.expire
@@ -1069,12 +1070,12 @@ def confirm_user_command(call: types.CallbackQuery):
             crud.update_user(db, db_user, UserModify(
                 status=UserStatusModify.active))
             xray.operations.add_user(db_user)
-
+            user = UserResponse.from_orm(db_user)
         bot.edit_message_text(
             get_user_info_text(
                 status='active',
                 username=username,
-                sub_url=db_user.subscription_url,
+                sub_url=user.subscription_url,
                 data_limit=db_user.data_limit,
                 usage=db_user.used_traffic,
                 expire=db_user.expire
@@ -1166,7 +1167,7 @@ def confirm_user_command(call: types.CallbackQuery):
             text = get_user_info_text(
                 status=db_user.status,
                 username=username,
-                sub_url=db_user.subscription_url,
+                sub_url=user.subscription_url,
                 expire=db_user.expire,
                 data_limit=db_user.data_limit,
                 usage=db_user.used_traffic)
