@@ -25,10 +25,10 @@ services:
             - /opt/marzban/marzban-telebot/telegram:/code/app/telegram
             - /opt/marzban/marzban-telebot/config.py:/code/config.py
 ```
-Then you have to edit your .env file.
+Then you have to edit your `.env` file.
 edit like this:
 
-WARNING: TELEGRAM_ADMIN_ID renamed to TELEGRAM_ADMINS_ID
+**WARNING: `TELEGRAM_ADMIN_ID` renamed to `TELEGRAM_ADMINS_ID`**
 ```
 TELEGRAM_API_TOKEN = 123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 TELEGRAM_ADMINS_ID = 987654321, 123456789
@@ -64,10 +64,10 @@ services:
             - /opt/marzban/marzban-telebot/telegram:/code/app/telegram
             - /opt/marzban/marzban-telebot/config.py:/code/config.py
 ```
-بعذش باید فایل .env رو تغییر بدید.
+بعذش باید فایل `.env` رو تغییر بدید.
 این هارو تغییر بدید:
 
-**توجه: اسم متغیر TELEGRAM_ADMIN_ID به TELEGRAM_ADMINS_ID تغییر کرده**
+**توجه: اسم متغیر `TELEGRAM_ADMIN_ID` به `TELEGRAM_ADMINS_ID` تغییر کرده**
 ```
 TELEGRAM_API_TOKEN = 123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 TELEGRAM_ADMINS_ID = 987654321, 123456789
