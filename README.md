@@ -64,7 +64,7 @@ services:
             - /opt/marzban/marzban-telebot/telegram:/code/app/telegram
             - /opt/marzban/marzban-telebot/config.py:/code/config.py
 ```
-بعذش باید فایل .env رو تغییر بدید.
+بعذش باید فایل `.env` رو تغییر بدید.
 این هارو تغییر بدید:
 
 **توجه: اسم متغیر TELEGRAM_ADMIN_ID به TELEGRAM_ADMINS_ID تغییر کرده**
