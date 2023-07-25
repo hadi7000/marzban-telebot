@@ -36,6 +36,9 @@ TELEGRAM_LOGGER_CHANNEL_ID = -1234567891234
 TELEGRAM_VLESS_FLOW = "xtls-rprx-vision"
 ```
 
+For logger channel you have to create a channel (its better to private), and send a message to the channel,
+then forward the message to <a href="https://t.me/userinfobot">userinfobot</a> the bot send you the channel id
+
 
 Now you can restart your marzban's docker:
 ```
@@ -74,6 +77,9 @@ TELEGRAM_ADMINS_ID = 987654321, 123456789
 TELEGRAM_LOGGER_CHANNEL_ID = -1234567891234
 TELEGRAM_VLESS_FLOW = "xtls-rprx-vision"
 ```
+
+برای کانال لاگر شما باید اول یک کانال (ترجیحا خصوصی) بسازید و داخلش یک پیام بفرستید.
+حالا اون پیام رو برای ربات <a href="https://t.me/userinfobot">userinfobot</a> بفرستید تا ایدی عددی کانال رو بهتون بده و داخل فایل قرار بدید.
 
 
 حالا مرزبان رو ریستارت میکنیم تا اعمال بشه:
