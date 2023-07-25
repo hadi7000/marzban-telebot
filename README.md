@@ -25,7 +25,7 @@ services:
             - /opt/marzban/marzban-telebot/telegram:/code/app/telegram
             - /opt/marzban/marzban-telebot/config.py:/code/config.py
 ```
-Then you have to edit your .env file.
+Then you have to edit your `.env` file.
 edit like this:
 
 WARNING: TELEGRAM_ADMIN_ID renamed to TELEGRAM_ADMINS_ID
