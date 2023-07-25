@@ -694,7 +694,7 @@ def add_user_from_template_username_step(message: types.Message):
             username += ''.join(random.choices(characters, k=4)) 
             username += '_' 
             username += ''.join(random.choices(characters, k=4))
-        match = re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-z\d]$', username)
+        match = re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-zA-Z\d]$', username)
         if not match:
             wait_msg = bot.send_message(
                 message.chat.id,
@@ -808,7 +808,7 @@ def add_user_username_step(message: types.Message):
         username += ''.join(random.choices(characters, k=4)) 
         username += '_' 
         username += ''.join(random.choices(characters, k=4))
-    if not re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-z\d]$', username):
+    if not re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-zA-Z\d]$', username):
         wait_msg = bot.send_message(
             message.chat.id,
             '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.',
