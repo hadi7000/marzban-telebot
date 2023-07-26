@@ -75,7 +75,7 @@ services:
 TELEGRAM_API_TOKEN = 123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 TELEGRAM_ADMINS_ID = 987654321, 123456789
 TELEGRAM_LOGGER_CHANNEL_ID = -1234567891234
-TELEGRAM_VLESS_FLOW = "xtls-rprx-vision"
+TELEGRAM_DEFAULT_VLESS_XTLS_FLOW = "xtls-rprx-vision"
 ```
 
 برای کانال لاگر شما باید اول یک کانال (ترجیحا خصوصی) بسازید و داخلش یک پیام بفرستید.
