@@ -4,7 +4,7 @@
 
 **<a href="https://github.com/mmdchnar/marzban-telebot/tree/main/screenshots">Screenshots</a>**
 
-# Usage
+# Install
 
 First you need to clone [the repository](https://github.com/mmdchnar/marzban-telebot) to your sever. You can do it by this:
 
@@ -44,9 +44,19 @@ Now you can restart your marzban's docker:
 ```
 marzban restart
 ```
+
+# Update
+
+For update just need to pull repository and restart:
+```bash
+cd /opt/marzban/marzban-telebot/
+git pull
+marzban restart
+```
+
 ---
 
-# استفاده
+# نصب
 
 اول باید  [رپوزیتوری](https://github.com/mmdchnar/marzban-telebot) رو تو سرورتون کلون کنید. برای اینکار این کامند هارو بزنید:
 
@@ -84,5 +94,14 @@ TELEGRAM_DEFAULT_VLESS_XTLS_FLOW = "xtls-rprx-vision"
 
 حالا مرزبان رو ریستارت میکنیم تا اعمال بشه:
 ```
+marzban restart
+```
+
+# به روز رسانی
+
+برای بروزرسانی فقط کافیه ریپوزیتوری رو اپدیت کنید و پنل رو ریستارت کنید:
+```bash
+cd /opt/marzban/marzban-telebot/
+git pull
 marzban restart
 ```
