@@ -4,7 +4,7 @@
 
 **<a href="https://github.com/mmdchnar/marzban-telebot/tree/main/screenshots">Screenshots</a>**
 
-# Usage
+# Install
 
 First you need to clone [the repository](https://github.com/mmdchnar/marzban-telebot) to your sever. You can do it by this:
 
@@ -33,17 +33,30 @@ edit like this:
 TELEGRAM_API_TOKEN = 123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 TELEGRAM_ADMINS_ID = 987654321, 123456789
 TELEGRAM_LOGGER_CHANNEL_ID = -1234567891234
-TELEGRAM_VLESS_FLOW = "xtls-rprx-vision"
+TELEGRAM_DEFAULT_VLESS_XTLS_FLOW = "xtls-rprx-vision"
 ```
+
+For logger channel you have to create a channel (its better to private), and send a message to the channel,
+then forward the message to <a href="https://t.me/userinfobot">userinfobot</a> the bot send you the channel id
 
 
 Now you can restart your marzban's docker:
 ```
 marzban restart
 ```
+
+# Update
+
+For update just need to pull repository and restart:
+```bash
+cd /opt/marzban/marzban-telebot/
+git pull
+marzban restart
+```
+
 ---
 
-# استفاده
+# نصب
 
 اول باید  [رپوزیتوری](https://github.com/mmdchnar/marzban-telebot) رو تو سرورتون کلون کنید. برای اینکار این کامند هارو بزنید:
 
@@ -72,11 +85,23 @@ services:
 TELEGRAM_API_TOKEN = 123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 TELEGRAM_ADMINS_ID = 987654321, 123456789
 TELEGRAM_LOGGER_CHANNEL_ID = -1234567891234
-TELEGRAM_VLESS_FLOW = "xtls-rprx-vision"
+TELEGRAM_DEFAULT_VLESS_XTLS_FLOW = "xtls-rprx-vision"
 ```
+
+برای کانال لاگر شما باید اول یک کانال (ترجیحا خصوصی) بسازید و داخلش یک پیام بفرستید.
+حالا اون پیام رو برای ربات <a href="https://t.me/userinfobot">userinfobot</a> بفرستید تا ایدی عددی کانال رو بهتون بده و داخل فایل قرار بدید.
 
 
 حالا مرزبان رو ریستارت میکنیم تا اعمال بشه:
 ```
+marzban restart
+```
+
+# به روز رسانی
+
+برای بروزرسانی فقط کافیه ریپوزیتوری رو اپدیت کنید و پنل رو ریستارت کنید:
+```bash
+cd /opt/marzban/marzban-telebot/
+git pull
 marzban restart
 ```
