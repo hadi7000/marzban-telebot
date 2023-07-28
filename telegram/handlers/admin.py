@@ -559,12 +559,14 @@ def template_charge_command(call: types.CallbackQuery):
 <b>Username :</b> <code>{user.username}</code>
 ➖➖➖➖➖➖➖➖➖
 <u><b>Last status</b></u>
-<b>├Traffic Limit :</b> <code>{readable_size(user.data_limit)}</code>
-<b>├Expire Date :</b> <code>{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d')}</code>
+<b>├Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
+<b>├Expire Date :</b> <code>\
+{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <u><b>New status</b></u>
-<b>├Traffic Limit :</b> <code>{readable_size(db_user.data_limit)}</code>
-<b>├Expire Date :</b> <code>{datetime.fromtimestamp(db_user.expire).strftime('%H:%M:%S %Y-%m-%d')}</code>
+<b>├Traffic Limit :</b> <code>{readable_size(db_user.data_limit) if db_user.data_limit else "Unlimited"}</code>
+<b>├Expire Date :</b> <code>\
+{datetime.fromtimestamp(db_user.expire).strftime('%H:%M:%S %Y-%m-%d') if db_user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={call.from_user.id}">{call.from_user.full_name}</a>'''
                 try:
@@ -1190,12 +1192,14 @@ def confirm_user_command(call: types.CallbackQuery):
 <b>Username :</b> <code>{user.username}</code>
 ➖➖➖➖➖➖➖➖➖
 <u><b>Last status</b></u>
-<b>├Traffic Limit :</b> <code>{readable_size(user.data_limit)}</code>
-<b>├Expire Date :</b> <code>{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d')}</code>
+<b>├Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
+<b>├Expire Date :</b> <code>\
+{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <u><b>New status</b></u>
-<b>├Traffic Limit :</b> <code>{readable_size(db_user.data_limit)}</code>
-<b>├Expire Date :</b> <code>{datetime.fromtimestamp(db_user.expire).strftime('%H:%M:%S %Y-%m-%d')}</code>
+<b>├Traffic Limit :</b> <code>{readable_size(db_user.data_limit) if db_user.data_limit else "Unlimited"}</code>
+<b>├Expire Date :</b> <code>\
+{datetime.fromtimestamp(db_user.expire).strftime('%H:%M:%S %Y-%m-%d') if db_user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>\
 '''
@@ -1282,8 +1286,8 @@ def confirm_user_command(call: types.CallbackQuery):
 📶 <b>#Traffic_Change #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Username :</b> <code>{user.username}</code>
-<b>Last Traffic Limit :</b> <code>{readable_size(last_user.data_limit)}</code>
-<b>New Traffic Limit :</b> <code>{readable_size(user.data_limit)}</code>{tag}'''
+<b>Last Traffic Limit :</b> <code>{readable_size(last_user.data_limit) if last_user.data_limit else "Unlimited"}</code>
+<b>New Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>{tag}'''
                 try:
                     bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, 'HTML')
                 except:
@@ -1293,8 +1297,10 @@ def confirm_user_command(call: types.CallbackQuery):
 📅 <b>#Expiry_Change #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Username :</b> <code>{user.username}</code>
-<b>Last Expire Date :</b> <code>{datetime.fromtimestamp(last_user.expire).strftime('%H:%M:%S %Y-%m-%d')}</code>
-<b>New Expire Date :</b> <code>{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d')}</code>{tag}'''
+<b>Last Expire Date :</b> <code>\
+{datetime.fromtimestamp(last_user.expire).strftime('%H:%M:%S %Y-%m-%d') if last_user.expire else "Never"}</code>
+<b>New Expire Date :</b> <code>\
+{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>{tag}'''
                 try:
                     bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, 'HTML')
                 except:
@@ -1387,8 +1393,9 @@ def confirm_user_command(call: types.CallbackQuery):
 🆕 <b>#Created #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Username :</b> <code>{user.username}</code>
-<b>Traffic Limit :</b> <code>{readable_size(user.data_limit)}</code>
-<b>Expire Date :</b> <code>{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d')}</code>
+<b>Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
+<b>Expire Date :</b> <code>\
+{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>
 <b>Proxies :</b> <code>{"" if not proxies else ", ".join([proxy.type for proxy in proxies])}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
