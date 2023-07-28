@@ -697,6 +697,13 @@ def add_user_from_template_username_step(message: types.Message):
             username += ''.join(random.choices(characters, k=4)) 
             username += '_' 
             username += ''.join(random.choices(characters, k=4))
+
+        template = crud.get_user_template(db, template_id)
+        if template.username_prefix:
+            username = template.username_prefix + username
+        if template.username_suffix:
+            username += template.username_suffix
+
         match = re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-zA-Z\d]$', username)
         if not match:
             wait_msg = bot.send_message(
@@ -706,13 +713,6 @@ def add_user_from_template_username_step(message: types.Message):
             )
             schedule_delete_message(wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
-
-        template = crud.get_user_template(db, template_id)
-
-        if template.username_prefix:
-            username = template.username_prefix + username
-        if template.username_suffix:
-            username += template.username_suffix
 
         if len(username) < 3:
             wait_msg = bot.send_message(
