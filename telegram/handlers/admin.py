@@ -529,11 +529,12 @@ def template_charge_command(call: types.CallbackQuery):
             if template.expire_duration:
                 expire_date = today + relativedelta(seconds=template.expire_duration)
             modify = UserModify(
-                status='active',
+                status=UserStatusModify.active,
                 expire=int(expire_date.timestamp()) if expire_date else 0,
                 data_limit=template.data_limit,
             )
             db_user = crud.update_user(db, db_user, modify)
+            xray.operations.add_user(db_user)
 
             text = get_user_info_text(
                 status='active',
