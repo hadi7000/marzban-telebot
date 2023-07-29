@@ -459,7 +459,7 @@ def genqr_command(call: types.CallbackQuery):
 
         user = UserResponse.from_orm(db_user)
 
-    bot.answer_callback_query(call.id, "Generating Qr code...")
+    bot.answer_callback_query(call.id, "Generating QR code...")
 
     for link in user.links:
         f = io.BytesIO()
@@ -490,7 +490,7 @@ def genqr_command(call: types.CallbackQuery):
             expire=user.expire
             ),
             parse_mode="HTML",
-            reply_markup=BotKeyboard.subscription_page
+            reply_markup=BotKeyboard.subscription_page(user.subscription_url)
         )
     try:
         bot.delete_message(call.message.chat.id, call.message.message_id)
