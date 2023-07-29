@@ -481,8 +481,16 @@ def genqr_command(call: types.CallbackQuery):
         bot.send_photo(
             call.message.chat.id,
             photo=f,
-            caption=f"<code>{user.subscription_url}</code>",
-            parse_mode="HTML"
+            caption=get_user_info_text(
+            status=user.status,
+            username=user.username,
+            sub_url=user.subscription_url,
+            data_limit=user.data_limit,
+            usage=user.used_traffic,
+            expire=user.expire
+            ),
+            parse_mode="HTML",
+            reply_markup=BotKeyboard.subscription_page
         )
     try:
         bot.delete_message(call.message.chat.id, call.message.message_id)

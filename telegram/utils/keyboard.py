@@ -113,6 +113,17 @@ class BotKeyboard:
         )
         return keyboard
 
+
+    @staticmethod
+    def subscription_page(sub_url: str):
+        keyboard = types.InlineKeyboardMarkup()
+        if sub_url[:4] == 'http':
+            keyboard.add(types.InlineKeyboardButton(
+                text='🚀 Subscription Page',
+                url=sub_url))
+        return keyboard
+
+
     @staticmethod
     def confirm_action(action: str, username: str = None):
         keyboard = types.InlineKeyboardMarkup()
