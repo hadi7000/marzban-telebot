@@ -531,7 +531,25 @@ def template_charge_command(call: types.CallbackQuery):
         if not db_user:
             return bot.answer_callback_query(call.id, "User not found!", show_alert=True)
         user = UserResponse.from_orm(db_user)
-        if (user.used_traffic > user.data_limit) or (now > datetime.fromtimestamp(user.expire)):
+        if (user.data_limit and not user.expire) or (not user.data_limit and user.expire):
+            text = get_user_info_text(
+                status='active',
+                username=username,
+                sub_url=user.subscription_url,
+                expire=int(((datetime.fromtimestamp(user.expire) if user.expire else today) +
+                            relativedelta(seconds=template.expire_duration)).timestamp()),
+                data_limit=(
+                            user.data_limit - user.used_traffic + template.data_limit) if user.data_limit else template.data_limit,
+                usage=0)
+            bot.edit_message_text(f'''\
+‼️ <b>If add template <u>Bandwidth</u> and <u>Time</u> to the user, the user will be this</b>:\n\n\
+{text}\n\n\
+<b>Add template <u>Bandwidth</u> and <u>Time</u> to user or Reset to <u>Template default</u></b>⁉️''',
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode='html',
+                reply_markup=BotKeyboard.charge_add_or_reset(username=username, template_id=template_id))
+        elif (not user.data_limit and not user.expire) or (user.used_traffic > user.data_limit) or (now > datetime.fromtimestamp(user.expire)):
             crud.reset_user_data_usage(db, db_user)
             expire_date = None
             if template.expire_duration:
@@ -1171,11 +1189,11 @@ def confirm_user_command(call: types.CallbackQuery):
             else:
                 expire_date = None
                 if template.expire_duration:
-                    expire_date = datetime.fromtimestamp(user.expire) + relativedelta(seconds=template.expire_duration)
+                    expire_date = (datetime.fromtimestamp(user.expire) if user.expire else today) + relativedelta(seconds=template.expire_duration)
                 modify = UserModify(
                     status='active',
                     expire=int(expire_date.timestamp()) if expire_date else 0,
-                    data_limit=user.data_limit - user.used_traffic + template.data_limit,
+                    data_limit=(user.data_limit or 0) - user.used_traffic + template.data_limit,
                 )
                 db_user = crud.update_user(db, db_user, modify)
 
