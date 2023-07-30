@@ -71,23 +71,24 @@ def get_system_info():
     )
 
 
-def schedule_delete_message(*message_ids: int) -> None:
-    messages: list[int] = mem_store.get("messages_to_delete", [])
+def schedule_delete_message(chat_id, *message_ids: int) -> None:
+    messages: list[int] = mem_store.get(f"{chat_id}:messages_to_delete", [])
     for mid in message_ids:
         messages.append(mid)
-    mem_store.set("messages_to_delete", messages)
+    mem_store.set(f"{chat_id}:messages_to_delete", messages)
 
 
 def cleanup_messages(chat_id: int) -> None:
-    messages: list[int] = mem_store.get("messages_to_delete", [])
+    messages: list[int] = mem_store.get(f"{chat_id}:messages_to_delete", [])
     for message_id in messages:
         try: bot.delete_message(chat_id, message_id)
         except: pass
-    mem_store.set("messages_to_delete", [])
+    mem_store.set(f"{chat_id}:messages_to_delete", [])
 
 
 @bot.message_handler(commands=['start', 'help'], is_admin=True)
 def help_command(message: types.Message):
+    cleanup_messages(message.chat.id)
     bot.clear_step_handler_by_chat_id(message.chat.id)
     return bot.reply_to(message, """
 {user_link} Welcome to Marzban Telegram-Bot Admin Panel.
@@ -171,10 +172,10 @@ def edit_command(call: types.CallbackQuery):
                 show_alert=True
             )
         user = UserResponse.from_orm(db_user)
-    mem_store.set('username', username)
-    mem_store.set('data_limit', db_user.data_limit)
-    mem_store.set('expire_date', datetime.fromtimestamp(db_user.expire) if db_user.expire else None)
-    mem_store.set('protocols', {protocol.value: inbounds for protocol, inbounds in db_user.inbounds.items()})
+    mem_store.set(f'{call.message.chat.id}:username', username)
+    mem_store.set(f'{call.message.chat.id}:data_limit', db_user.data_limit)
+    mem_store.set(f'{call.message.chat.id}:expire_date', datetime.fromtimestamp(db_user.expire) if db_user.expire else None)
+    mem_store.set(f'{call.message.chat.id}:protocols', {protocol.value: inbounds for protocol, inbounds in db_user.inbounds.items()})
     bot.edit_message_text(
         f"📝 Editing user `{username}`",
         call.message.chat.id,
@@ -185,7 +186,7 @@ def edit_command(call: types.CallbackQuery):
             "edit",
             username=username,
             data_limit=db_user.data_limit,
-            expire_date=mem_store.get("expire_date"),
+            expire_date=mem_store.get(f"{call.message.chat.id}:expire_date"),
         )
     )
 
@@ -214,7 +215,7 @@ def cancel_command(call: types.CallbackQuery):
 @bot.callback_query_handler(cb_query_startswith('edit_user:'), is_admin=True)
 def edit_user_command(call: types.CallbackQuery):
     _, username, action = call.data.split(":")
-    schedule_delete_message(call.message.id)
+    schedule_delete_message(call.message.chat.id, call.message.id)
     cleanup_messages(call.message.chat.id)
     if action == "data":
         msg = bot.send_message(
@@ -222,45 +223,45 @@ def edit_user_command(call: types.CallbackQuery):
             '⬆️ Enter Data Limit (GB):\n⚠️ Send 0 for unlimited.',
             reply_markup=BotKeyboard.inline_cancel_action(f'user:{username}')
         )
-        mem_store.set("edit_msg_text", call.message.text)
+        mem_store.set(f"{call.message.chat.id}:edit_msg_text", call.message.text)
         bot.clear_step_handler_by_chat_id(call.message.chat.id)
         bot.register_next_step_handler(
             call.message, edit_user_data_limit_step, username)
-        schedule_delete_message(msg.message_id)
+        schedule_delete_message(call.message.chat.id, msg.message_id)
     elif action == "expire":
         msg = bot.send_message(
             call.message.chat.id,
             '⬆️ Enter Expire Date (YYYY-MM-DD)\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D) :\n⚠️ Send 0 for never expire.',
             reply_markup=BotKeyboard.inline_cancel_action(f'user:{username}'))
-        mem_store.set("edit_msg_text", call.message.text)
+        mem_store.set(f"{call.message.chat.id}:edit_msg_text", call.message.text)
         bot.clear_step_handler_by_chat_id(call.message.chat.id)
         bot.register_next_step_handler(
             call.message, edit_user_expire_step, username=username)
-        schedule_delete_message(msg.message_id)
+        schedule_delete_message(call.message.chat.id, msg.message_id)
 
 
 def edit_user_data_limit_step(message: types.Message, username: str):
     try:
         if float(message.text) < 0:
             wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be greater or equal to 0.')
-            schedule_delete_message(wait_msg.message_id)
+            schedule_delete_message(message.chat.id, wait_msg.message_id)
             return bot.register_next_step_handler(wait_msg, edit_user_data_limit_step, username=username)
         data_limit = float(message.text) * 1024 * 1024 * 1024
     except ValueError:
         wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be a number.')
-        schedule_delete_message(wait_msg.message_id)
+        schedule_delete_message(message.chat.id, wait_msg.message_id)
         return bot.register_next_step_handler(wait_msg, edit_user_data_limit_step, username=username)
-    mem_store.set('data_limit', data_limit)
-    schedule_delete_message(message.message_id)
-    text = mem_store.get("edit_msg_text")
-    mem_store.delete("edit_msg_text")
+    mem_store.set(f'{message.chat.id}:data_limit', data_limit)
+    schedule_delete_message(message.chat.id, message.message_id)
+    text = mem_store.get(f"{message.chat.id}:edit_msg_text")
+    mem_store.delete(f"{message.chat.id}:edit_msg_text")
     bot.send_message(
         message.chat.id,
         text or f"📝 Editing user <code>{username}</code>",
         parse_mode="html",
         reply_markup=BotKeyboard.select_protocols(
-        mem_store.get('protocols'), "edit",
-        username=username, data_limit=data_limit, expire_date=mem_store.get('expire_date')))
+        mem_store.get(f'{message.chat.id}:protocols'), "edit",
+        username=username, data_limit=data_limit, expire_date=mem_store.get(f'{message.chat.id}:expire_date')))
     cleanup_messages(message.chat.id)
 
 
@@ -291,24 +292,24 @@ def edit_user_expire_step(message: types.Message, username: str):
             expire_date = None
         if expire_date and expire_date < today:
             wait_msg = bot.send_message(message.chat.id, '❌ Expire date must be greater than today.')
-            schedule_delete_message(wait_msg.message_id)
+            schedule_delete_message(message.chat.id, wait_msg.message_id)
             return bot.register_next_step_handler(wait_msg, edit_user_expire_step, username=username)
     except ValueError:
         wait_msg = bot.send_message(message.chat.id, '❌ Expire date must be in YYYY-MM-DD format.\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D)')
-        schedule_delete_message(wait_msg.message_id)
+        schedule_delete_message(message.chat.id, wait_msg.message_id)
         return bot.register_next_step_handler(wait_msg, edit_user_expire_step, username=username)
 
-    mem_store.set('expire_date', expire_date)
-    schedule_delete_message(message.message_id)
-    text = mem_store.get("edit_msg_text")
-    mem_store.delete("edit_msg_text")
+    mem_store.set(f'{message.chat.id}:expire_date', expire_date)
+    schedule_delete_message(message.chat.id, message.message_id)
+    text = mem_store.get(f"{message.chat.id}:edit_msg_text")
+    mem_store.delete(f"{message.chat.id}:edit_msg_text")
     bot.send_message(
         message.chat.id,
         text or f"📝 Editing user <code>{username}</code>",
         parse_mode="html",
         reply_markup=BotKeyboard.select_protocols(
-        mem_store.get('protocols'), "edit",
-        username=username, data_limit=mem_store.get('data_limit'), expire_date=expire_date))
+        mem_store.get(f'{message.chat.id}:protocols'), "edit",
+        username=username, data_limit=mem_store.get(f'{message.chat.id}:data_limit'), expire_date=expire_date))
     cleanup_messages(message.chat.id)
 
 
@@ -652,7 +653,7 @@ def add_user_from_template(call: types.CallbackQuery):
     if template.username_suffix:
         text += f"\n⚠️ Username will be suffixed with <code>{template.username_suffix}</code>"
 
-    mem_store.set("template_id", template.id)
+    mem_store.set(f"{call.message.chat.id}:template_id", template.id)
     template_msg = bot.edit_message_text(
         text,
         call.message.chat.id,
@@ -666,7 +667,7 @@ def add_user_from_template(call: types.CallbackQuery):
         parse_mode="HTML",
         reply_markup=BotKeyboard.random_username(template_id=template.id)
     )
-    schedule_delete_message(template_msg.message_id, msg.id)
+    schedule_delete_message(call.message.chat.id, template_msg.message_id, msg.id)
     bot.register_next_step_handler(template_msg, add_user_from_template_username_step)
 
 
@@ -674,7 +675,7 @@ def add_user_from_template(call: types.CallbackQuery):
 def random_username(call: types.CallbackQuery):
     bot.clear_step_handler_by_chat_id(call.message.chat.id)
     template_id = int(call.data.split(":")[1] or 0)
-    mem_store.delete('template_id')
+    mem_store.delete(f'{call.message.chat.id}:template_id')
 
     characters = string.ascii_letters + '1234567890'
     username = random.choice(characters)
@@ -682,14 +683,14 @@ def random_username(call: types.CallbackQuery):
     username += '_' 
     username += ''.join(random.choices(characters, k=4))
 
-    schedule_delete_message(call.message.id)
+    schedule_delete_message(call.message.chat.id, call.message.id)
     cleanup_messages(call.message.chat.id)
 
     if not template_id:
         msg = bot.send_message(call.message.chat.id,
             '⬆️ Enter Data Limit (GB):\n⚠️ Send 0 for unlimited.',
             reply_markup=BotKeyboard.inline_cancel_action())
-        schedule_delete_message(msg.id)
+        schedule_delete_message(call.message.chat.id, msg.id)
         return bot.register_next_step_handler(call.message, add_user_data_limit_step, username=username)
 
 
@@ -701,9 +702,9 @@ def random_username(call: types.CallbackQuery):
             username += template.username_suffix
 
         template = UserTemplateResponse.from_orm(template)
-    mem_store.set("username", username)
-    mem_store.set("data_limit", template.data_limit)
-    mem_store.set("protocols", template.inbounds)
+    mem_store.set(f"{call.message.chat.id}:username", username)
+    mem_store.set(f"{call.message.chat.id}:data_limit", template.data_limit)
+    mem_store.set(f"{call.message.chat.id}:protocols", template.inbounds)
     now = datetime.now()
     today = datetime(
         year=now.year,
@@ -715,7 +716,7 @@ def random_username(call: types.CallbackQuery):
     expire_date = None
     if template.expire_duration:
         expire_date = today + relativedelta(seconds=template.expire_duration)
-    mem_store.set("expire_date", expire_date)
+    mem_store.set(f"{call.message.chat.id}:expire_date", expire_date)
 
     text = f"📝 Creating user <code>{username}</code>\n" + get_template_info_text(
         id=template.id, data_limit=template.data_limit, expire_duration=template.expire_duration,
@@ -734,13 +735,13 @@ def random_username(call: types.CallbackQuery):
 
 
 def add_user_from_template_username_step(message: types.Message):
-    template_id = mem_store.get("template_id")
+    template_id = mem_store.get(f"{message.chat.id}:template_id")
     if template_id is None:
         return bot.send_message(message.chat.id, "An error occured in the process! try again.")
 
     if not message.text:
         wait_msg = bot.send_message(message.chat.id, '❌ Username can not be empty.')
-        schedule_delete_message(wait_msg.message_id, message.message_id)
+        schedule_delete_message(message.chat.id, wait_msg.message_id, message.message_id)
         return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
 
     with GetDB() as db:
@@ -756,30 +757,30 @@ def add_user_from_template_username_step(message: types.Message):
         if not match:
             wait_msg = bot.send_message(message.chat.id,
                 '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.')
-            schedule_delete_message(wait_msg.message_id, message.message_id)
+            schedule_delete_message(message.chat.id, wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
 
         if len(username) < 3:
             wait_msg = bot.send_message(message.chat.id,
                 f"❌ Username can't be generated because is shorter than 32 characters! username: <code>{username}</code>",
                 parse_mode="HTML")
-            schedule_delete_message(wait_msg.message_id, message.message_id)
+            schedule_delete_message(message.chat.id, wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
         elif len(username) > 32:
             wait_msg = bot.send_message(message.chat.id,
                 f"❌ Username can't be generated because is longer than 32 characters! username: <code>{username}</code>",
                 parse_mode="HTML")
-            schedule_delete_message(wait_msg.message_id, message.message_id)
+            schedule_delete_message(message.chat.id, wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
 
         if crud.get_user(db, username):
             wait_msg = bot.send_message(message.chat.id, '❌ Username already exists.')
-            schedule_delete_message(wait_msg.message_id, message.message_id)
+            schedule_delete_message(message.chat.id, wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
         template = UserTemplateResponse.from_orm(template)
-    mem_store.set("username", username)
-    mem_store.set("data_limit", template.data_limit)
-    mem_store.set("protocols", template.inbounds)
+    mem_store.set(f"{message.chat.id}:username", username)
+    mem_store.set(f"{message.chat.id}:data_limit", template.data_limit)
+    mem_store.set(f"{message.chat.id}:protocols", template.inbounds)
     now = datetime.now()
     today = datetime(
         year=now.year,
@@ -792,7 +793,7 @@ def add_user_from_template_username_step(message: types.Message):
     expire_date = None
     if template.expire_duration:
         expire_date = today + relativedelta(seconds=template.expire_duration)
-    mem_store.set("expire_date", expire_date)
+    mem_store.set(f"{message.chat.id}:expire_date", expire_date)
 
     text = f"📝 Creating user <code>{username}</code>\n" + get_template_info_text(
         id=template.id, data_limit=template.data_limit, expire_duration=template.expire_duration,
@@ -810,7 +811,7 @@ def add_user_from_template_username_step(message: types.Message):
             expire_date=expire_date,
         )
     )
-    schedule_delete_message(message.id)
+    schedule_delete_message(message.chat.id, message.id)
     cleanup_messages(message.chat.id)
 
 
@@ -825,7 +826,7 @@ def add_user_command(call: types.CallbackQuery):
         '👤 Enter username:\n⚠️Username only can be 3 to 32 characters and contain a-z, A-Z 0-9, and underscores in '
         'between.',
         reply_markup=BotKeyboard.random_username())
-    schedule_delete_message(username_msg.id)
+    schedule_delete_message(call.message.chat.id, username_msg.id)
     bot.register_next_step_handler(username_msg, add_user_username_step)
 
 
@@ -833,27 +834,27 @@ def add_user_username_step(message: types.Message):
     username = message.text
     if not username:
         wait_msg = bot.send_message(message.chat.id, '❌ Username can not be empty.')
-        schedule_delete_message(wait_msg.id)
-        schedule_delete_message(message.id)
+        schedule_delete_message(message.chat.id, wait_msg.id)
+        schedule_delete_message(message.chat.id, message.id)
         return bot.register_next_step_handler(wait_msg, add_user_username_step)
     if not re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-zA-Z\d]$', username):
         wait_msg = bot.send_message(message.chat.id,
             '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.')
-        schedule_delete_message(wait_msg.id)
-        schedule_delete_message(message.id)
+        schedule_delete_message(message.chat.id, wait_msg.id)
+        schedule_delete_message(message.chat.id, message.id)
         return bot.register_next_step_handler(wait_msg, add_user_username_step)
     with GetDB() as db:
         if crud.get_user(db, username):
             wait_msg = bot.send_message(message.chat.id, '❌ Username already exists.')
-            schedule_delete_message(wait_msg.id)
-            schedule_delete_message(message.id)
+            schedule_delete_message(message.chat.id, wait_msg.id)
+            schedule_delete_message(message.chat.id, message.id)
             return bot.register_next_step_handler(wait_msg, add_user_username_step)
-    schedule_delete_message(message.id)
+    schedule_delete_message(message.chat.id, message.id)
     cleanup_messages(message.chat.id)
     msg = bot.send_message(message.chat.id,
         '⬆️ Enter Data Limit (GB):\n⚠️ Send 0 for unlimited.',
         reply_markup=BotKeyboard.inline_cancel_action())
-    schedule_delete_message(msg.id)
+    schedule_delete_message(message.chat.id, msg.id)
     bot.register_next_step_handler(msg, add_user_data_limit_step, username=username)
 
 
@@ -861,21 +862,21 @@ def add_user_data_limit_step(message: types.Message, username: str):
     try:
         if float(message.text) < 0:
             wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be greater or equal to 0.')
-            schedule_delete_message(wait_msg.id)
-            schedule_delete_message(message.id)
+            schedule_delete_message(message.chat.id, wait_msg.id)
+            schedule_delete_message(message.chat.id, message.id)
             return bot.register_next_step_handler(wait_msg, add_user_data_limit_step, username=username)
         data_limit = float(message.text) * 1024 * 1024 * 1024
     except ValueError:
         wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be a number.')
-        schedule_delete_message(wait_msg.id)
-        schedule_delete_message(message.id)
+        schedule_delete_message(message.chat.id, wait_msg.id)
+        schedule_delete_message(message.chat.id, message.id)
         return bot.register_next_step_handler(wait_msg, add_user_data_limit_step, username=username)
-    schedule_delete_message(message.id)
+    schedule_delete_message(message.chat.id, message.id)
     cleanup_messages(message.chat.id)
     msg = bot.send_message(message.chat.id,
         '⬆️ Enter Expire Date (YYYY-MM-DD)\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D) :\n⚠️ Send 0 for never expire.',
         reply_markup=BotKeyboard.inline_cancel_action())
-    schedule_delete_message(msg.id)
+    schedule_delete_message(message.chat.id, msg.id)
     bot.register_next_step_handler(msg, add_user_expire_step, username=username, data_limit=data_limit)
 
 
@@ -906,29 +907,29 @@ def add_user_expire_step(message: types.Message, username: str, data_limit: int)
             expire_date = None
         if expire_date and expire_date < today:
             wait_msg = bot.send_message(message.chat.id, '❌ Expire date must be greater than today.')
-            schedule_delete_message(wait_msg.id)
-            schedule_delete_message(message.id)
+            schedule_delete_message(message.chat.id, wait_msg.id)
+            schedule_delete_message(message.chat.id, message.id)
             return bot.register_next_step_handler(wait_msg, add_user_expire_step, username=username, data_limit=data_limit)
     except ValueError:
         wait_msg = bot.send_message(message.chat.id,
             '❌ Expire date must be in YYYY-MM-DD format.\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D)')
-        schedule_delete_message(wait_msg.id)
-        schedule_delete_message(message.id)
+        schedule_delete_message(message.chat.id, wait_msg.id)
+        schedule_delete_message(message.chat.id, message.id)
         return bot.register_next_step_handler(wait_msg, add_user_expire_step, username=username, data_limit=data_limit)
-    mem_store.set('username', username)
-    mem_store.set('data_limit', data_limit)
-    mem_store.set('expire_date', expire_date)
+    mem_store.set(f'{message.chat.id}:username', username)
+    mem_store.set(f'{message.chat.id}:data_limit', data_limit)
+    mem_store.set(f'{message.chat.id}:expire_date', expire_date)
 
-    schedule_delete_message(message.id)
+    schedule_delete_message(message.chat.id, message.id)
     cleanup_messages(message.chat.id)
     bot.send_message(
         message.chat.id,
         'Select Protocols:\nUsernames: {}\nData Limit: {}\nExpiry Date {}'.format(
-            mem_store.get('username'),
-            readable_size(mem_store.get('data_limit')) if mem_store.get(
-                'data_limit') else "Unlimited",
-            mem_store.get('expire_date').strftime(
-                "%Y-%m-%d") if mem_store.get('expire_date') else 'Never'
+            mem_store.get(f'{message.chat.id}:username'),
+            readable_size(mem_store.get(f'{message.chat.id}:data_limit'))\
+                if mem_store.get(f'{message.chat.id}:data_limit') else "Unlimited",
+            mem_store.get(f'{message.chat.id}:expire_date').strftime("%Y-%m-%d")\
+                if mem_store.get(f'{message.chat.id}:expire_date') else 'Never'
         ),
         reply_markup=BotKeyboard.select_protocols({}, action="create")
     )
@@ -936,9 +937,9 @@ def add_user_expire_step(message: types.Message, username: str, data_limit: int)
 
 @bot.callback_query_handler(cb_query_startswith('select_inbound:'), is_admin=True)
 def select_inbounds(call: types.CallbackQuery):
-    if not (username := mem_store.get('username')):
+    if not (username := mem_store.get(f'{call.message.chat.id}:username')):
         return bot.answer_callback_query(call.id, '❌ No user selected.', show_alert=True)
-    protocols: dict[str, list[str]] = mem_store.get('protocols', {})
+    protocols: dict[str, list[str]] = mem_store.get(f'{call.message.chat.id}:protocols', {})
     _, inbound, action = call.data.split(':')
     for protocol, inbounds in xray.config.inbounds_by_protocol.items():
         for i in inbounds:
@@ -951,7 +952,7 @@ def select_inbounds(call: types.CallbackQuery):
             if len(protocols[protocol]) < 1:
                 del protocols[protocol]
 
-    mem_store.set('protocols', protocols)
+    mem_store.set(f'{call.message.chat.id}:protocols', protocols)
 
     if action in ["edit", "create_from_template"]:
         return bot.edit_message_text(
@@ -962,8 +963,8 @@ def select_inbounds(call: types.CallbackQuery):
                 protocols,
                 "edit",
                 username=username,
-                data_limit=mem_store.get("data_limit"),
-                expire_date=mem_store.get("expire_date"))
+                data_limit=mem_store.get(f"{call.message.chat.id}:data_limit"),
+                expire_date=mem_store.get(f"{call.message.chat.id}:expire_date"))
         )
     bot.edit_message_text(
         call.message.text,
@@ -975,16 +976,16 @@ def select_inbounds(call: types.CallbackQuery):
 
 @bot.callback_query_handler(cb_query_startswith('select_protocol:'), is_admin=True)
 def select_protocols(call: types.CallbackQuery):
-    if not (username := mem_store.get('username')):
+    if not (username := mem_store.get(f'{call.message.chat.id}:username')):
         return bot.answer_callback_query(call.id, '❌ No user selected.', show_alert=True)
-    protocols: dict[str, list[str]] = mem_store.get('protocols', {})
+    protocols: dict[str, list[str]] = mem_store.get(f'{call.message.chat.id}:protocols', {})
     _, protocol, action = call.data.split(':')
     if protocol in protocols:
         del protocols[protocol]
     else:
         protocols.update(
             {protocol: [inbound['tag'] for inbound in xray.config.inbounds_by_protocol[protocol]]})
-    mem_store.set('protocols', protocols)
+    mem_store.set(f'{call.message.chat.id}:protocols', protocols)
 
     if action == ["edit", "create_from_template"]:
         return bot.edit_message_text(
@@ -995,8 +996,8 @@ def select_protocols(call: types.CallbackQuery):
                 protocols,
                 "edit",
                 username=username,
-                data_limit=mem_store.get("data_limit"),
-                expire_date=mem_store.get("expire_date"))
+                data_limit=mem_store.get(f"{call.message.chat.id}:data_limit"),
+                expire_date=mem_store.get(f"{call.message.chat.id}:expire_date"))
         )
     bot.edit_message_text(
         call.message.text,
@@ -1218,7 +1219,7 @@ def confirm_user_command(call: types.CallbackQuery):
 
 
     elif data == 'edit_user':
-        if (username := mem_store.get('username')) is None:
+        if (username := mem_store.get(f'{call.message.chat.id}:username')) is None:
             try:
                 bot.delete_message(call.message.chat.id,
                                    call.message.message_id)
@@ -1230,7 +1231,7 @@ def confirm_user_command(call: types.CallbackQuery):
                 reply_markup=BotKeyboard.main_menu()
             )
 
-        if not mem_store.get('protocols'):
+        if not mem_store.get(f'{call.message.chat.id}:protocols'):
             return bot.answer_callback_query(
                 call.id,
                 '❌ No inbounds selected.',
@@ -1238,7 +1239,7 @@ def confirm_user_command(call: types.CallbackQuery):
             )
 
         inbounds: dict[str, list[str]] = {
-            k: v for k, v in mem_store.get('protocols').items() if v}
+            k: v for k, v in mem_store.get(f'{call.message.chat.id}:protocols').items() if v}
 
         with GetDB() as db:
             db_user = crud.get_user(db, username)
@@ -1254,8 +1255,8 @@ def confirm_user_command(call: types.CallbackQuery):
                     del proxies[protocol]
 
             modify = UserModify(
-                expire=int(mem_store.get('expire_date').timestamp()) if mem_store.get('expire_date') else 0,
-                data_limit=mem_store.get("data_limit"),
+                expire=int(mem_store.get(f'{call.message.chat.id}:expire_date').timestamp()) if mem_store.get(f'{call.message.chat.id}:expire_date') else 0,
+                data_limit=mem_store.get(f"{call.message.chat.id}:data_limit"),
                 proxies=proxies,
                 inbounds=inbounds
             )
@@ -1326,7 +1327,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     pass
 
     elif data == 'add_user':
-        if mem_store.get('username') is None:
+        if mem_store.get(f'{call.message.chat.id}:username') is None:
             try:
                 bot.delete_message(call.message.chat.id,
                                    call.message.message_id)
@@ -1338,7 +1339,7 @@ def confirm_user_command(call: types.CallbackQuery):
                 reply_markup=BotKeyboard.main_menu()
             )
 
-        if not mem_store.get('protocols'):
+        if not mem_store.get(f'{call.message.chat.id}:protocols'):
             return bot.answer_callback_query(
                 call.id,
                 '❌ No inbounds selected.',
@@ -1346,14 +1347,15 @@ def confirm_user_command(call: types.CallbackQuery):
             )
 
         inbounds: dict[str, list[str]] = {
-            k: v for k, v in mem_store.get('protocols').items() if v}
+            k: v for k, v in mem_store.get(f'{call.message.chat.id}:protocols').items() if v}
         proxies = {p: ({'flow': TELEGRAM_DEFAULT_VLESS_XTLS_FLOW} if \
                        TELEGRAM_DEFAULT_VLESS_XTLS_FLOW and p == ProxyTypes.VLESS else {}) for p in inbounds}
         new_user = UserCreate(
-            username=mem_store.get('username'),
-            expire=int(mem_store.get('expire_date').timestamp()) if mem_store.get('expire_date') else None,
-            data_limit=mem_store.get('data_limit') if mem_store.get(
-                'data_limit') else None,
+            username=mem_store.get(f'{call.message.chat.id}:username'),
+            expire=int(mem_store.get(f'{call.message.chat.id}:expire_date').timestamp())\
+                if mem_store.get(f'{call.message.chat.id}:expire_date') else None,
+            data_limit=mem_store.get(f'{call.message.chat.id}:data_limit')\
+                if mem_store.get(f'{call.message.chat.id}:data_limit') else None,
             proxies=proxies,
             inbounds=inbounds
         )
