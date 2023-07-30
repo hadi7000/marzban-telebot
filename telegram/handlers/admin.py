@@ -3,6 +3,7 @@ import math
 import re
 import random
 import string
+import os
 from datetime import datetime
 
 import qrcode
@@ -157,6 +158,37 @@ def activate_user_command(call: types.CallbackQuery):
         reply_markup=BotKeyboard.confirm_action(
             action="activate", username=username),
     )
+
+
+@bot.callback_query_handler(cb_query_equals('edit_all'), is_admin=True)
+def edit_all_command(call: types.CallbackQuery):
+    with GetDB() as db:
+        total_users = crud.get_users_count(db)
+        users_active = crud.get_users_count(db, UserStatus.active)
+        text = '''
+👥 *Total Users*: `{total_users}`
+🟢 *Active Users*: `{active_users}`
+🔴 *Deactivate Users*: `{deactivate_users}`'''.format(
+        total_users=total_users,
+        active_users=users_active,
+        deactivate_users=total_users - users_active)
+    return bot.edit_message_text(
+        text,
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="markdown",
+        reply_markup=BotKeyboard.edit_all_menu()
+    )
+
+
+@bot.callback_query_handler(cb_query_equals('delete_depleted'), is_admin=True)
+def delete_depleted_command(call: types.CallbackQuery):
+    bot.edit_message_text(
+        f"⚠️ Are you sure? This will *DELETE All DEPLETED Users*‼️",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="markdown",
+        reply_markup=BotKeyboard.confirm_action(action="delete_depleted"))
 
 
 @bot.callback_query_handler(cb_query_startswith("edit:"), is_admin=True)
@@ -1012,7 +1044,14 @@ def confirm_user_command(call: types.CallbackQuery):
     data = call.data.split(':')[1]
     chat_id = call.from_user.id
     full_name = call.from_user.full_name
-
+    now = datetime.now()
+    today = datetime(
+        year=now.year,
+        month=now.month,
+        day=now.day,
+        hour=23,
+        minute=59,
+        second=59)
     if data == 'delete':
         username = call.data.split(':')[2]
         with GetDB() as db:
@@ -1125,15 +1164,6 @@ def confirm_user_command(call: types.CallbackQuery):
 
     elif data in ['charge_add', 'charge_reset']:
         _, _, username, template_id = call.data.split(":")
-        now = datetime.now()
-        today = datetime(
-            year=now.year,
-            month=now.month,
-            day=now.day,
-            hour=23,
-            minute=59,
-            second=59
-        )
         with GetDB() as db:
             template = crud.get_user_template(db, template_id)
             if not template:
@@ -1413,6 +1443,40 @@ def confirm_user_command(call: types.CallbackQuery):
                 bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, 'HTML')
             except:
                 pass
+
+    elif data == 'delete_depleted':
+        with GetDB() as db:
+            depleted_users = crud.get_users(db, status=[UserStatus.limited, UserStatus.expired])
+            file_name = f'depleted_users_{int(now.timestamp())}.txt'
+            with open(file_name, 'w') as f:
+                f.write('USERNAME\tEXIPRY\t\t\tUSAGE/LIMIT\t\tSTATUS\n')
+                for user in depleted_users:
+                    crud.remove_user(db, user)
+                    xray.operations.remove_user(user)
+                    f.write(\
+f'{user.username}\
+\t{datetime.fromtimestamp(user.expire) if user.expire else "never"}\
+\t{readable_size(user.used_traffic) if user.used_traffic else 0}\
+/{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
+\t{user.status}\n')
+            bot.edit_message_text(
+                '✅ <b>Depleted Users Deleted</b>',
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=BotKeyboard.main_menu())
+            if TELEGRAM_LOGGER_CHANNEL_ID:
+                text = f'''\
+🗑 <b>#Delete #Depleted #From_Bot</b>
+➖➖➖➖➖➖➖➖➖
+<b>Count:</b> <code>{len(depleted_users)}</code>
+➖➖➖➖➖➖➖➖➖
+<b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
+                try:
+                    bot.send_document(TELEGRAM_LOGGER_CHANNEL_ID, open(file_name, 'rb'), caption=text, parse_mode='HTML')
+                    os.remove(file_name)
+                except:
+                    pass
 
 
 @bot.message_handler(func=lambda message: True, is_admin=True)

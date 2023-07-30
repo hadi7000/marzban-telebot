@@ -21,16 +21,26 @@ class BotKeyboard:
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton(text='🔁 System Info', callback_data='system'),
-            types.InlineKeyboardButton(text='♻️ Restart Xray', callback_data='restart'),
-        )
+            types.InlineKeyboardButton(text='♻️ Restart Xray', callback_data='restart'))
         keyboard.add(
-            types.InlineKeyboardButton(text='➕ Create User', callback_data='add_user'),
             types.InlineKeyboardButton(text='👥 Users', callback_data='users:1'),
-        )
+            types.InlineKeyboardButton(text='✏️ Edit All Users', callback_data='edit_all'))
         keyboard.add(
-            types.InlineKeyboardButton(text='➕ Create User from Template', callback_data='template_add_user')
-        )
+            types.InlineKeyboardButton(text='➕ Create User From Template', callback_data='template_add_user'))
+        keyboard.add(
+            types.InlineKeyboardButton(text='➕ Create User', callback_data='add_user'))
         return keyboard
+
+
+    @staticmethod
+    def edit_all_menu():
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton(text='🗑 Delete Depleted', callback_data='delete_depleted'))
+        # keyboard.add(types.InlineKeyboardButton(text='🔋 Add Bandwidth', callback_data='add_bandwidth'))
+        # keyboard.add(types.InlineKeyboardButton(text='📅 Add Time', callback_data='add_time'))
+        keyboard.add(types.InlineKeyboardButton(text='🔙 Back', callback_data='cancel'))
+        return keyboard
+
 
     @staticmethod
     def templates_menu(templates: Dict[str, int], username: str = None):
@@ -109,7 +119,7 @@ class BotKeyboard:
 
         keyboard.add(
             types.InlineKeyboardButton(
-                text="🖼 Qr code",
+                text="🖼 QR code",
                 callback_data=f'genqr:{username}'
             )
         )
