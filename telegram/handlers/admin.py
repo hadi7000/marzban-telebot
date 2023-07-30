@@ -1050,11 +1050,10 @@ def confirm_user_command(call: types.CallbackQuery):
             text = f'''\
 🗑 <b>#Deleted #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
-<b>Username :</b> <code>{user.username}</code>
-<b>Traffic Limit :</b> <code>{readable_size(user.data_limit) if user.data_limit else "Unlimited"}</code>
+<b>Username :</b> <code>{db_user.username}</code>
+<b>Traffic Limit :</b> <code>{readable_size(db_user.data_limit) if db_user.data_limit else "Unlimited"}</code>
 <b>Expire Date :</b> <code>\
-{datetime.fromtimestamp(user.expire).strftime('%H:%M:%S %Y-%m-%d') if user.expire else "Never"}</code>
-<b>Proxies :</b> <code>{"" if not proxies else ", ".join([proxy.type for proxy in proxies])}</code>
+{datetime.fromtimestamp(db_user.expire).strftime('%H:%M:%S %Y-%m-%d') if db_user.expire else "Never"}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
             try:
