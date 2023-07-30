@@ -88,6 +88,7 @@ def cleanup_messages(chat_id: int) -> None:
 
 @bot.message_handler(commands=['start', 'help'], is_admin=True)
 def help_command(message: types.Message):
+    bot.clear_step_handler_by_chat_id(message.chat.id)
     return bot.reply_to(message, """
 {user_link} Welcome to Marzban Telegram-Bot Admin Panel.
 Here you can manage your users and proxies.
@@ -159,6 +160,7 @@ def activate_user_command(call: types.CallbackQuery):
 
 @bot.callback_query_handler(cb_query_startswith("edit:"), is_admin=True)
 def edit_command(call: types.CallbackQuery):
+    bot.clear_step_handler_by_chat_id(call.message.chat.id)
     username = call.data.split(":")[1]
     with GetDB() as db:
         db_user = crud.get_user(db, username)
@@ -171,10 +173,8 @@ def edit_command(call: types.CallbackQuery):
         user = UserResponse.from_orm(db_user)
     mem_store.set('username', username)
     mem_store.set('data_limit', db_user.data_limit)
-    mem_store.set('expire_date', datetime.fromtimestamp(db_user.expire)
-    if db_user.expire else None)
-    mem_store.set('protocols', {
-        protocol.value: inbounds for protocol, inbounds in db_user.inbounds.items()})
+    mem_store.set('expire_date', datetime.fromtimestamp(db_user.expire) if db_user.expire else None)
+    mem_store.set('protocols', {protocol.value: inbounds for protocol, inbounds in db_user.inbounds.items()})
     bot.edit_message_text(
         f"📝 Editing user `{username}`",
         call.message.chat.id,
@@ -201,6 +201,7 @@ def help_edit_command(call: types.CallbackQuery):
 
 @bot.callback_query_handler(cb_query_equals('cancel'), is_admin=True)
 def cancel_command(call: types.CallbackQuery):
+    bot.clear_step_handler_by_chat_id(call.message.chat.id)
     return bot.edit_message_text(
         get_system_info(),
         call.message.chat.id,
@@ -213,14 +214,16 @@ def cancel_command(call: types.CallbackQuery):
 @bot.callback_query_handler(cb_query_startswith('edit_user:'), is_admin=True)
 def edit_user_command(call: types.CallbackQuery):
     _, username, action = call.data.split(":")
-    schedule_delete_message(call.message.message_id)
+    schedule_delete_message(call.message.id)
+    cleanup_messages(call.message.chat.id)
     if action == "data":
         msg = bot.send_message(
             call.message.chat.id,
             '⬆️ Enter Data Limit (GB):\n⚠️ Send 0 for unlimited.',
-            reply_markup=BotKeyboard.cancel_action()
+            reply_markup=BotKeyboard.inline_cancel_action(f'user:{username}')
         )
         mem_store.set("edit_msg_text", call.message.text)
+        bot.clear_step_handler_by_chat_id(call.message.chat.id)
         bot.register_next_step_handler(
             call.message, edit_user_data_limit_step, username)
         schedule_delete_message(msg.message_id)
@@ -228,36 +231,23 @@ def edit_user_command(call: types.CallbackQuery):
         msg = bot.send_message(
             call.message.chat.id,
             '⬆️ Enter Expire Date (YYYY-MM-DD)\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D) :\n⚠️ Send 0 for never expire.',
-            reply_markup=BotKeyboard.cancel_action())
+            reply_markup=BotKeyboard.inline_cancel_action(f'user:{username}'))
         mem_store.set("edit_msg_text", call.message.text)
+        bot.clear_step_handler_by_chat_id(call.message.chat.id)
         bot.register_next_step_handler(
             call.message, edit_user_expire_step, username=username)
         schedule_delete_message(msg.message_id)
 
 
 def edit_user_data_limit_step(message: types.Message, username: str):
-    if message.text == 'Cancel':
-        return bot.send_message(
-            message.chat.id,
-            '✅ Cancelled.',
-            reply_markup=types.ReplyKeyboardRemove()
-        )
     try:
         if float(message.text) < 0:
-            wait_msg = bot.send_message(
-                message.chat.id,
-                '❌ Data limit must be greater or equal to 0.',
-                reply_markup=BotKeyboard.cancel_action()
-            )
+            wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be greater or equal to 0.')
             schedule_delete_message(wait_msg.message_id)
             return bot.register_next_step_handler(wait_msg, edit_user_data_limit_step, username=username)
         data_limit = float(message.text) * 1024 * 1024 * 1024
     except ValueError:
-        wait_msg = bot.send_message(
-            message.chat.id,
-            '❌ Data limit must be a number.',
-            reply_markup=BotKeyboard.cancel_action()
-        )
+        wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be a number.')
         schedule_delete_message(wait_msg.message_id)
         return bot.register_next_step_handler(wait_msg, edit_user_data_limit_step, username=username)
     mem_store.set('data_limit', data_limit)
@@ -268,19 +258,13 @@ def edit_user_data_limit_step(message: types.Message, username: str):
         message.chat.id,
         text or f"📝 Editing user <code>{username}</code>",
         parse_mode="html",
-        reply_markup=BotKeyboard.select_protocols(mem_store.get(
-            "protocols"), "edit", username=username, data_limit=data_limit, expire_date=mem_store.get("expire_date"))
-    )
+        reply_markup=BotKeyboard.select_protocols(
+        mem_store.get('protocols'), "edit",
+        username=username, data_limit=data_limit, expire_date=mem_store.get('expire_date')))
     cleanup_messages(message.chat.id)
 
 
 def edit_user_expire_step(message: types.Message, username: str):
-    if message.text == 'Cancel':
-        return bot.send_message(
-            message.chat.id,
-            '✅ Cancelled.',
-            reply_markup=types.ReplyKeyboardRemove()
-        )
     try:
         now = datetime.now()
         today = datetime(
@@ -306,20 +290,11 @@ def edit_user_expire_step(message: types.Message, username: str):
         else:
             expire_date = None
         if expire_date and expire_date < today:
-            wait_msg = bot.send_message(
-                message.chat.id,
-                '❌ Expire date must be greater than today.',
-                reply_markup=BotKeyboard.cancel_action()
-            )
+            wait_msg = bot.send_message(message.chat.id, '❌ Expire date must be greater than today.')
             schedule_delete_message(wait_msg.message_id)
-            return bot.register_next_step_handler(
-                wait_msg, edit_user_expire_step, username=username)
+            return bot.register_next_step_handler(wait_msg, edit_user_expire_step, username=username)
     except ValueError:
-        wait_msg = bot.send_message(
-            message.chat.id,
-            '❌ Expire date must be in YYYY-MM-DD format.\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D)',
-            reply_markup=BotKeyboard.cancel_action()
-        )
+        wait_msg = bot.send_message(message.chat.id, '❌ Expire date must be in YYYY-MM-DD format.\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D)')
         schedule_delete_message(wait_msg.message_id)
         return bot.register_next_step_handler(wait_msg, edit_user_expire_step, username=username)
 
@@ -331,9 +306,9 @@ def edit_user_expire_step(message: types.Message, username: str):
         message.chat.id,
         text or f"📝 Editing user <code>{username}</code>",
         parse_mode="html",
-        reply_markup=BotKeyboard.select_protocols(mem_store.get(
-            "protocols"), "edit", username=username, data_limit=mem_store.get("data_limit"), expire_date=expire_date)
-    )
+        reply_markup=BotKeyboard.select_protocols(
+        mem_store.get('protocols'), "edit",
+        username=username, data_limit=mem_store.get('data_limit'), expire_date=expire_date))
     cleanup_messages(message.chat.id)
 
 
@@ -660,7 +635,7 @@ def add_user_from_template_command(call: types.CallbackQuery):
 
 
 @bot.callback_query_handler(cb_query_startswith('template_add_user:'), is_admin=True)
-def add_user_command(call: types.CallbackQuery):
+def add_user_from_template(call: types.CallbackQuery):
     template_id = int(call.data.split(":")[1])
     with GetDB() as db:
         template = crud.get_user_template(db, template_id)
@@ -689,10 +664,73 @@ def add_user_command(call: types.CallbackQuery):
         call.message.chat.id,
         text,
         parse_mode="HTML",
-        reply_markup=BotKeyboard.cancel_action()
+        reply_markup=BotKeyboard.random_username(template_id=template.id)
     )
     schedule_delete_message(template_msg.message_id, msg.id)
     bot.register_next_step_handler(template_msg, add_user_from_template_username_step)
+
+
+@bot.callback_query_handler(cb_query_startswith('random'), is_admin=True)
+def random_username(call: types.CallbackQuery):
+    bot.clear_step_handler_by_chat_id(call.message.chat.id)
+    template_id = int(call.data.split(":")[1] or 0)
+    mem_store.delete('template_id')
+
+    characters = string.ascii_letters + '1234567890'
+    username = random.choice(characters)
+    username += ''.join(random.choices(characters, k=4)) 
+    username += '_' 
+    username += ''.join(random.choices(characters, k=4))
+
+    schedule_delete_message(call.message.id)
+    cleanup_messages(call.message.chat.id)
+
+    if not template_id:
+        msg = bot.send_message(call.message.chat.id,
+            '⬆️ Enter Data Limit (GB):\n⚠️ Send 0 for unlimited.',
+            reply_markup=BotKeyboard.inline_cancel_action())
+        schedule_delete_message(msg.id)
+        return bot.register_next_step_handler(call.message, add_user_data_limit_step, username=username)
+
+
+    with GetDB() as db:
+        template = crud.get_user_template(db, template_id)
+        if template.username_prefix:
+            username = template.username_prefix + username
+        if template.username_suffix:
+            username += template.username_suffix
+
+        template = UserTemplateResponse.from_orm(template)
+    mem_store.set("username", username)
+    mem_store.set("data_limit", template.data_limit)
+    mem_store.set("protocols", template.inbounds)
+    now = datetime.now()
+    today = datetime(
+        year=now.year,
+        month=now.month,
+        day=now.day,
+        hour=23,
+        minute=59,
+        second=59)
+    expire_date = None
+    if template.expire_duration:
+        expire_date = today + relativedelta(seconds=template.expire_duration)
+    mem_store.set("expire_date", expire_date)
+
+    text = f"📝 Creating user <code>{username}</code>\n" + get_template_info_text(
+        id=template.id, data_limit=template.data_limit, expire_duration=template.expire_duration,
+        username_prefix=template.username_prefix, username_suffix=template.username_suffix, inbounds=template.inbounds)
+
+    bot.send_message(
+        call.message.chat.id,
+        text,
+        parse_mode="HTML",
+        reply_markup=BotKeyboard.select_protocols(
+            template.inbounds,
+            "create_from_template",
+            username=username,
+            data_limit=template.data_limit,
+            expire_date=expire_date,))
 
 
 def add_user_from_template_username_step(message: types.Message):
@@ -701,28 +739,12 @@ def add_user_from_template_username_step(message: types.Message):
         return bot.send_message(message.chat.id, "An error occured in the process! try again.")
 
     if not message.text:
-        wait_msg = bot.send_message(
-            message.chat.id,
-            '❌ Username can not be empty.',
-            reply_markup=BotKeyboard.cancel_action()
-        )
+        wait_msg = bot.send_message(message.chat.id, '❌ Username can not be empty.')
         schedule_delete_message(wait_msg.message_id, message.message_id)
         return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
 
-    elif message.text == 'Cancel':
-        return bot.send_message(
-            message.chat.id,
-            '✅ Cancelled.',
-            reply_markup=BotKeyboard.main_menu()
-        )
     with GetDB() as db:
         username = message.text
-        if message.text == '🔡 Random Username':
-            characters = string.ascii_letters + '1234567890'
-            username = random.choice(characters)
-            username += ''.join(random.choices(characters, k=4)) 
-            username += '_' 
-            username += ''.join(random.choices(characters, k=4))
 
         template = crud.get_user_template(db, template_id)
         if template.username_prefix:
@@ -732,35 +754,26 @@ def add_user_from_template_username_step(message: types.Message):
 
         match = re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-zA-Z\d]$', username)
         if not match:
-            wait_msg = bot.send_message(
-                message.chat.id,
-                '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.',
-                reply_markup=BotKeyboard.cancel_action()
-            )
+            wait_msg = bot.send_message(message.chat.id,
+                '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.')
             schedule_delete_message(wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
 
         if len(username) < 3:
-            wait_msg = bot.send_message(
-                message.chat.id,
+            wait_msg = bot.send_message(message.chat.id,
                 f"❌ Username can't be generated because is shorter than 32 characters! username: <code>{username}</code>",
-                parse_mode="HTML", reply_markup=BotKeyboard.cancel_action())
+                parse_mode="HTML")
             schedule_delete_message(wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
         elif len(username) > 32:
-            wait_msg = bot.send_message(
-                message.chat.id,
+            wait_msg = bot.send_message(message.chat.id,
                 f"❌ Username can't be generated because is longer than 32 characters! username: <code>{username}</code>",
-                parse_mode="HTML", reply_markup=BotKeyboard.cancel_action())
+                parse_mode="HTML")
             schedule_delete_message(wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
 
         if crud.get_user(db, username):
-            wait_msg = bot.send_message(
-                message.chat.id,
-                '❌ Username already exists.',
-                reply_markup=BotKeyboard.cancel_action()
-            )
+            wait_msg = bot.send_message(message.chat.id, '❌ Username already exists.')
             schedule_delete_message(wait_msg.message_id, message.message_id)
             return bot.register_next_step_handler(wait_msg, add_user_from_template_username_step)
         template = UserTemplateResponse.from_orm(template)
@@ -811,94 +824,62 @@ def add_user_command(call: types.CallbackQuery):
         call.message.chat.id,
         '👤 Enter username:\n⚠️Username only can be 3 to 32 characters and contain a-z, A-Z 0-9, and underscores in '
         'between.',
-        reply_markup=BotKeyboard.cancel_action()
-    )
+        reply_markup=BotKeyboard.random_username())
+    schedule_delete_message(username_msg.id)
     bot.register_next_step_handler(username_msg, add_user_username_step)
 
 
 def add_user_username_step(message: types.Message):
     username = message.text
-    if username == 'Cancel':
-        return bot.send_message(
-            message.chat.id,
-            '✅ Cancelled.',
-            reply_markup=BotKeyboard.main_menu()
-        )
     if not username:
-        wait_msg = bot.send_message(
-            message.chat.id,
-            '❌ Username can not be empty.',
-            reply_markup=BotKeyboard.cancel_action()
-        )
+        wait_msg = bot.send_message(message.chat.id, '❌ Username can not be empty.')
+        schedule_delete_message(wait_msg.id)
+        schedule_delete_message(message.id)
         return bot.register_next_step_handler(wait_msg, add_user_username_step)
-    if username == '🔡 Random Username':
-        characters = string.ascii_letters + '1234567890'
-        username = random.choice(characters)
-        username += ''.join(random.choices(characters, k=4)) 
-        username += '_' 
-        username += ''.join(random.choices(characters, k=4))
     if not re.match(r'^(?!.*__)(?!.*_$)\w{2,31}[a-zA-Z\d]$', username):
-        wait_msg = bot.send_message(
-            message.chat.id,
-            '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.',
-            reply_markup=BotKeyboard.cancel_action()
-        )
+        wait_msg = bot.send_message(message.chat.id,
+            '❌ Username only can be 3 to 32 characters and contain a-z, A-Z, 0-9, and underscores in between.')
+        schedule_delete_message(wait_msg.id)
+        schedule_delete_message(message.id)
         return bot.register_next_step_handler(wait_msg, add_user_username_step)
     with GetDB() as db:
         if crud.get_user(db, username):
-            wait_msg = bot.send_message(
-                message.chat.id,
-                '❌ Username already exists.',
-                reply_markup=BotKeyboard.cancel_action()
-            )
+            wait_msg = bot.send_message(message.chat.id, '❌ Username already exists.')
+            schedule_delete_message(wait_msg.id)
+            schedule_delete_message(message.id)
             return bot.register_next_step_handler(wait_msg, add_user_username_step)
-    bot.send_message(
-        message.chat.id,
+    schedule_delete_message(message.id)
+    cleanup_messages(message.chat.id)
+    msg = bot.send_message(message.chat.id,
         '⬆️ Enter Data Limit (GB):\n⚠️ Send 0 for unlimited.',
-        reply_markup=BotKeyboard.cancel_action()
-    )
-    bot.register_next_step_handler(
-        message, add_user_data_limit_step, username=username)
+        reply_markup=BotKeyboard.inline_cancel_action())
+    schedule_delete_message(msg.id)
+    bot.register_next_step_handler(msg, add_user_data_limit_step, username=username)
 
 
 def add_user_data_limit_step(message: types.Message, username: str):
-    if message.text == 'Cancel':
-        return bot.send_message(
-            message.chat.id,
-            '✅ Cancelled.',
-            reply_markup=BotKeyboard.main_menu()
-        )
     try:
         if float(message.text) < 0:
-            wait_msg = bot.send_message(
-                message.chat.id,
-                '❌ Data limit must be greater or equal to 0.',
-                reply_markup=BotKeyboard.cancel_action()
-            )
+            wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be greater or equal to 0.')
+            schedule_delete_message(wait_msg.id)
+            schedule_delete_message(message.id)
             return bot.register_next_step_handler(wait_msg, add_user_data_limit_step, username=username)
         data_limit = float(message.text) * 1024 * 1024 * 1024
     except ValueError:
-        wait_msg = bot.send_message(
-            message.chat.id,
-            '❌ Data limit must be a number.',
-            reply_markup=BotKeyboard.cancel_action()
-        )
+        wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be a number.')
+        schedule_delete_message(wait_msg.id)
+        schedule_delete_message(message.id)
         return bot.register_next_step_handler(wait_msg, add_user_data_limit_step, username=username)
-    bot.send_message(
-        message.chat.id,
+    schedule_delete_message(message.id)
+    cleanup_messages(message.chat.id)
+    msg = bot.send_message(message.chat.id,
         '⬆️ Enter Expire Date (YYYY-MM-DD)\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D) :\n⚠️ Send 0 for never expire.',
-        reply_markup=BotKeyboard.cancel_action())
-    bot.register_next_step_handler(
-        message, add_user_expire_step, username=username, data_limit=data_limit)
+        reply_markup=BotKeyboard.inline_cancel_action())
+    schedule_delete_message(msg.id)
+    bot.register_next_step_handler(msg, add_user_expire_step, username=username, data_limit=data_limit)
 
 
 def add_user_expire_step(message: types.Message, username: str, data_limit: int):
-    if message.text == 'Cancel':
-        return bot.send_message(
-            message.chat.id,
-            '✅ Cancelled.',
-            reply_markup=BotKeyboard.main_menu()
-        )
     try:
         now = datetime.now()
         today = datetime(
@@ -924,24 +905,22 @@ def add_user_expire_step(message: types.Message, username: str, data_limit: int)
         else:
             expire_date = None
         if expire_date and expire_date < today:
-            wait_msg = bot.send_message(
-                message.chat.id,
-                '❌ Expire date must be greater than today.',
-                reply_markup=BotKeyboard.cancel_action()
-            )
-            return bot.register_next_step_handler(
-                wait_msg, add_user_expire_step, username=username, data_limit=data_limit)
+            wait_msg = bot.send_message(message.chat.id, '❌ Expire date must be greater than today.')
+            schedule_delete_message(wait_msg.id)
+            schedule_delete_message(message.id)
+            return bot.register_next_step_handler(wait_msg, add_user_expire_step, username=username, data_limit=data_limit)
     except ValueError:
-        wait_msg = bot.send_message(
-            message.chat.id,
-            '❌ Expire date must be in YYYY-MM-DD format.\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D)',
-            reply_markup=BotKeyboard.cancel_action()
-        )
+        wait_msg = bot.send_message(message.chat.id,
+            '❌ Expire date must be in YYYY-MM-DD format.\nOr You Can Use Regex Symbol: ^[0-9]{1,3}(M|D)')
+        schedule_delete_message(wait_msg.id)
+        schedule_delete_message(message.id)
         return bot.register_next_step_handler(wait_msg, add_user_expire_step, username=username, data_limit=data_limit)
     mem_store.set('username', username)
     mem_store.set('data_limit', data_limit)
     mem_store.set('expire_date', expire_date)
 
+    schedule_delete_message(message.id)
+    cleanup_messages(message.chat.id)
     bot.send_message(
         message.chat.id,
         'Select Protocols:\nUsernames: {}\nData Limit: {}\nExpiry Date {}'.format(

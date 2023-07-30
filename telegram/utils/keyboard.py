@@ -42,18 +42,26 @@ class BotKeyboard:
                 row.append(
                     types.InlineKeyboardButton(
                         text=name,
-                        callback_data=f'template_charge:{_id}:{username}' if username else f"template_add_user:{_id}"
-                    )
-                )
+                        callback_data=f'template_charge:{_id}:{username}' if username else f"template_add_user:{_id}"))
             keyboard.add(*row)
 
         keyboard.add(
             types.InlineKeyboardButton(
                 text='🔙 Back',
-                callback_data=f'user:{username}' if username else 'cancel'
-            )
-        )
+                callback_data=f'user:{username}' if username else 'cancel'))
+        return keyboard
 
+
+    @staticmethod
+    def random_username(template_id: str = ''):
+        keyboard = types.InlineKeyboardMarkup()
+
+        keyboard.add(types.InlineKeyboardButton(
+                text='🔙 Cancel',
+                callback_data='cancel'),
+            types.InlineKeyboardButton(
+                text='🔡 Random Username',
+                callback_data=f'random:{template_id}'))
         return keyboard
 
 
@@ -159,27 +167,13 @@ class BotKeyboard:
         )
         return keyboard
 
-    @staticmethod
-    def cancel_action():
-        keyboard = types.ReplyKeyboardMarkup(True, False)
-        keyboard.add(
-            types.KeyboardButton(
-                text='🔡 Random Username'
-            )
-        )
-        keyboard.add(
-            types.KeyboardButton(
-                text='Cancel'
-            )
-        )
-        return keyboard
 
     @staticmethod
     def inline_cancel_action(callback_data: str = "cancel"):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton(
-                text="Cancel",
+                text="🔙 Cancel",
                 callback_data=callback_data
             )
         )
