@@ -57,11 +57,11 @@ class BotKeyboard:
         keyboard = types.InlineKeyboardMarkup()
 
         keyboard.add(types.InlineKeyboardButton(
-                text='🔙 Cancel',
-                callback_data='cancel'),
-            types.InlineKeyboardButton(
                 text='🔡 Random Username',
                 callback_data=f'random:{template_id}'))
+        keyboard.add(types.InlineKeyboardButton(
+                text='🔙 Cancel',
+                callback_data='cancel'))
         return keyboard
 
 
