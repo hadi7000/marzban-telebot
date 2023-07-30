@@ -1450,9 +1450,13 @@ def confirm_user_command(call: types.CallbackQuery):
             file_name = f'depleted_users_{int(now.timestamp())}.txt'
             with open(file_name, 'w') as f:
                 f.write('USERNAME\tEXIPRY\t\t\tUSAGE/LIMIT\t\tSTATUS\n')
+                deleted = 0
                 for user in depleted_users:
-                    crud.remove_user(db, user)
-                    xray.operations.remove_user(user)
+                    try:
+                        crud.remove_user(db, user)
+                        xray.operations.remove_user(user)
+                        deleted +=1
+                    except: pass
                     f.write(\
 f'{user.username}\
 \t{datetime.fromtimestamp(user.expire) if user.expire else "never"}\
@@ -1469,7 +1473,7 @@ f'{user.username}\
                 text = f'''\
 🗑 <b>#Delete #Depleted #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
-<b>Count:</b> <code>{len(depleted_users)}</code>
+<b>Count:</b> <code>{deleted}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
                 try:
