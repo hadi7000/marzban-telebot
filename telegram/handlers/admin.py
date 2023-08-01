@@ -1609,7 +1609,8 @@ f'{user.username}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
 /{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
 \t{user.status}\n')
-                    except: pass
+                    except sqlalchemy.exc.DataBaseError:
+                        db.rollback()
             bot.edit_message_text(
                 f'✅ <b>{data[7:].title()} Users Deleted</b>',
                 call.message.chat.id,
@@ -1637,15 +1638,18 @@ f'{user.username}\
             with open(file_name, 'w') as f:
                 f.write('USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n')
                 for user in users:
-                    if user.data_limit and user.status not in [UserStatus.limited, UserStatus.expired]:
-                        user = crud.update_user(db, user, UserModify(data_limit=(user.data_limit + data_limit)))
-                        counter += 1
-                        f.write(\
+                    try:
+                        if user.data_limit and user.status not in [UserStatus.limited, UserStatus.expired]:
+                            user = crud.update_user(db, user, UserModify(data_limit=(user.data_limit + data_limit)))
+                            counter += 1
+                            f.write(\
 f'{user.username}\
 \t{datetime.fromtimestamp(user.expire) if user.expire else "never"}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
 /{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
 \t{user.status}\n')
+                    except sqlalchemy.exc.DataBaseError:
+                        db.rollback()
             cleanup_messages(chat_id)
             bot.send_message(
                 chat_id,
@@ -1675,17 +1679,20 @@ f'{user.username}\
             with open(file_name, 'w') as f:
                 f.write('USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n')
                 for user in users:
-                    if user.expire and user.status not in [UserStatus.limited, UserStatus.expired]:
-                        user = crud.update_user(
-                            db, user,
-                            UserModify(expire=int((datetime.fromtimestamp(user.expire) + relativedelta(days=days)).timestamp())))
-                        counter += 1
-                        f.write(\
+                    try:
+                        if user.expire and user.status not in [UserStatus.limited, UserStatus.expired]:
+                            user = crud.update_user(
+                                db, user,
+                                UserModify(expire=int((datetime.fromtimestamp(user.expire) + relativedelta(days=days)).timestamp())))
+                            counter += 1
+                            f.write(\
 f'{user.username}\
 \t{datetime.fromtimestamp(user.expire) if user.expire else "never"}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
 /{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
 \t{user.status}\n')
+                    except sqlalchemy.exc.DataBaseError:
+                        db.rollback()
             cleanup_messages(chat_id)
             bot.send_message(
                 chat_id,
@@ -1733,9 +1740,12 @@ f'{user.username}\
                             proxies.update({protocol: {}})
                         elif protocol in user.inbounds and protocol not in new_inbounds:
                             del proxies[protocol]
-                    user = crud.update_user(db, user, UserModify(inbounds=new_inbounds, proxies=proxies))
-                    if user.status == UserStatus.active:
-                        xray.operations.update_user(user)
+                    try:
+                        user = crud.update_user(db, user, UserModify(inbounds=new_inbounds, proxies=proxies))
+                        if user.status == UserStatus.active:
+                            xray.operations.update_user(user)
+                    except sqlalchemy.exc.DataBaseError:
+                        db.rollback()
             
             bot.edit_message_text(
                 f'✅ <b>{data[8:].title()}</b> <code>{inbound}</code> <b>Users Successfully</b>',
