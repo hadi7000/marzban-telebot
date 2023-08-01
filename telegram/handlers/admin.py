@@ -1312,21 +1312,21 @@ def confirm_user_command(call: types.CallbackQuery):
                 if template.expire_duration:
                     expire_date = today + relativedelta(seconds=template.expire_duration)
                 modify = UserModify(
-                    status='active',
+                    status=UserStatus.active,
                     expire=int(expire_date.timestamp()) if expire_date else 0,
                     data_limit=template.data_limit,
                 )
-                db_user = crud.update_user(db, db_user, modify)
             else:
                 expire_date = None
                 if template.expire_duration:
                     expire_date = (datetime.fromtimestamp(user.expire) if user.expire else today) + relativedelta(seconds=template.expire_duration)
                 modify = UserModify(
-                    status='active',
+                    status=UserStatus.active,
                     expire=int(expire_date.timestamp()) if expire_date else 0,
                     data_limit=(user.data_limit or 0) - user.used_traffic + template.data_limit,
                 )
-                db_user = crud.update_user(db, db_user, modify)
+            db_user = crud.update_user(db, db_user, modify)
+            xray.operations.add_user(db_user)
 
             text = get_user_info_text(
                 status=db_user.status,
