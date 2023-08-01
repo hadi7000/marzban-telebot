@@ -793,7 +793,7 @@ def add_user_from_template(call: types.CallbackQuery):
     text = get_template_info_text(
         template_id, data_limit=template.data_limit, expire_duration=template.expire_duration,
         username_prefix=template.username_prefix, username_suffix=template.username_suffix,
-        inbounds=template.inbounds)
+        inbounds=template.inbounds or xray.config.inbounds_by_protocol)
     if template.username_prefix:
         text += f"\n⚠️ Username will be prefixed with <code>{template.username_prefix}</code>"
     if template.username_suffix:
@@ -850,7 +850,7 @@ def random_username(call: types.CallbackQuery):
         template = UserTemplateResponse.from_orm(template)
     mem_store.set(f"{call.message.chat.id}:username", username)
     mem_store.set(f"{call.message.chat.id}:data_limit", template.data_limit)
-    mem_store.set(f"{call.message.chat.id}:protocols", template.inbounds)
+    mem_store.set(f"{call.message.chat.id}:protocols", template.inbounds or xray.config.inbounds_by_protocol)
     now = datetime.now()
     today = datetime(
         year=now.year,
@@ -866,14 +866,14 @@ def random_username(call: types.CallbackQuery):
 
     text = f"📝 Creating user <code>{username}</code>\n" + get_template_info_text(
         id=template.id, data_limit=template.data_limit, expire_duration=template.expire_duration,
-        username_prefix=template.username_prefix, username_suffix=template.username_suffix, inbounds=template.inbounds)
+        username_prefix=template.username_prefix, username_suffix=template.username_suffix, inbounds=template.inbounds or xray.config.inbounds_by_protocol)
 
     bot.send_message(
         call.message.chat.id,
         text,
         parse_mode="HTML",
         reply_markup=BotKeyboard.select_protocols(
-            template.inbounds,
+            template.inbounds or xray.config.inbounds_by_protocol,
             "create_from_template",
             username=username,
             data_limit=template.data_limit,
@@ -926,7 +926,7 @@ def add_user_from_template_username_step(message: types.Message):
         template = UserTemplateResponse.from_orm(template)
     mem_store.set(f"{message.chat.id}:username", username)
     mem_store.set(f"{message.chat.id}:data_limit", template.data_limit)
-    mem_store.set(f"{message.chat.id}:protocols", template.inbounds)
+    mem_store.set(f"{message.chat.id}:protocols", template.inbounds or xray.config.inbounds_by_protocol)
     now = datetime.now()
     today = datetime(
         year=now.year,
@@ -943,14 +943,14 @@ def add_user_from_template_username_step(message: types.Message):
 
     text = f"📝 Creating user <code>{username}</code>\n" + get_template_info_text(
         id=template.id, data_limit=template.data_limit, expire_duration=template.expire_duration,
-        username_prefix=template.username_prefix, username_suffix=template.username_suffix, inbounds=template.inbounds)
+        username_prefix=template.username_prefix, username_suffix=template.username_suffix, inbounds=template.inbounds or xray.config.inbounds_by_protocol)
 
     bot.send_message(
         message.chat.id,
         text,
         parse_mode="HTML",
         reply_markup=BotKeyboard.select_protocols(
-            template.inbounds,
+            template.inbounds or xray.config.inbounds_by_protocol,
             "create_from_template",
             username=username,
             data_limit=template.data_limit,
@@ -1322,7 +1322,7 @@ def confirm_user_command(call: types.CallbackQuery):
                 return bot.answer_callback_query(call.id, "User not found!", show_alert=True)
             user = UserResponse.from_orm(db_user)
 
-            inbounds = template.inbounds
+            inbounds = template.inbounds or xray.config.inbounds_by_protocol
             proxies = {p.type.value: p.settings for p in db_user.proxies}
 
             for protocol in xray.config.inbounds_by_protocol:
