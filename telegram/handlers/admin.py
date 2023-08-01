@@ -1592,6 +1592,11 @@ def confirm_user_command(call: types.CallbackQuery):
                 pass
 
     elif data in ['delete_expired', 'delete_limited']:
+        bot.edit_message_text(
+            '⏳ <b>In Progress...</b>',
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode="HTML")
         with GetDB() as db:
             depleted_users = crud.get_users(db, status=[UserStatus.limited if data == 'delete_limited' else UserStatus.expired])
             file_name = f'{data[8:]}_users_{int(now.timestamp()*1000)}.txt'
@@ -1609,10 +1614,10 @@ f'{user.username}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
 /{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
 \t{user.status}\n')
-                    except sqlalchemy.exc.DataBaseError:
+                    except:
                         db.rollback()
             bot.edit_message_text(
-                f'✅ <b>{data[7:].title()} Users Deleted</b>',
+                f'✅ <code>{deleted}</code> <b>{data[7:].title()} Users Deleted</b>',
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode="HTML",
@@ -1630,6 +1635,9 @@ f'{user.username}\
                 except:
                     pass
     elif data == 'add_data':
+        schedule_delete_message(
+            call.message.chat.id, 
+            bot.send_message(chat_id, '⏳ <b>In Progress...</b>', 'HTML').id)
         data_limit = float(call.data.split(":")[2]) * 1024 * 1024 * 1024
         with GetDB() as db:
             users = crud.get_users(db)
@@ -1648,7 +1656,7 @@ f'{user.username}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
 /{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
 \t{user.status}\n')
-                    except sqlalchemy.exc.DataBaseError:
+                    except:
                         db.rollback()
             cleanup_messages(chat_id)
             bot.send_message(
@@ -1671,6 +1679,9 @@ f'{user.username}\
                     pass
 
     elif data == 'add_time':
+        schedule_delete_message(
+            call.message.chat.id, 
+            bot.send_message(chat_id, '⏳ <b>In Progress...</b>', 'HTML').id)
         days = int(call.data.split(":")[2])
         with GetDB() as db:
             users = crud.get_users(db)
@@ -1691,7 +1702,7 @@ f'{user.username}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
 /{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
 \t{user.status}\n')
-                    except sqlalchemy.exc.DataBaseError:
+                    except:
                         db.rollback()
             cleanup_messages(chat_id)
             bot.send_message(
@@ -1713,6 +1724,11 @@ f'{user.username}\
                 except:
                     pass
     elif data in ['inbound_add', 'inbound_remove']:
+        bot.edit_message_text(
+            '⏳ <b>In Progress...</b>',
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode="HTML")
         inbound = call.data.split(":")[2]
         with GetDB() as db:
             users = crud.get_users(db)
@@ -1744,7 +1760,7 @@ f'{user.username}\
                         user = crud.update_user(db, user, UserModify(inbounds=new_inbounds, proxies=proxies))
                         if user.status == UserStatus.active:
                             xray.operations.update_user(user)
-                    except sqlalchemy.exc.DataBaseError:
+                    except:
                         db.rollback()
             
             bot.edit_message_text(
