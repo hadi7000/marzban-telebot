@@ -40,6 +40,7 @@ class BotKeyboard:
             types.InlineKeyboardButton(text='🗑 Delete Limited', callback_data='delete_limited'))
         keyboard.add(types.InlineKeyboardButton(text='🔋 Change Data', callback_data='add_data'),
                      types.InlineKeyboardButton(text='📅 Change Time', callback_data='add_time'))
+        keyboard.add(types.InlineKeyboardButton(text='🔙 Back', callback_data='cancel'))
         return keyboard
 
 
