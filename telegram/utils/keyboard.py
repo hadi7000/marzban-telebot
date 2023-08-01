@@ -41,6 +41,18 @@ class BotKeyboard:
         keyboard.add(
             types.InlineKeyboardButton(text='🔋 Data (➕|➖)', callback_data='add_data'),
             types.InlineKeyboardButton(text='📅 Time (➕|➖)', callback_data='add_time'))
+        keyboard.add(
+            types.InlineKeyboardButton(text='➕ Add Inbound', callback_data='inbound_add'),
+            types.InlineKeyboardButton(text='➖ Remove Inbound', callback_data='inbound_remove'))
+        keyboard.add(types.InlineKeyboardButton(text='🔙 Back', callback_data='cancel'))
+        return keyboard
+
+
+    @staticmethod
+    def inbounds_menu(action, inbounds):
+        keyboard = types.InlineKeyboardMarkup()
+        for inbound in inbounds:
+            keyboard.add(types.InlineKeyboardButton(text=inbound, callback_data=f'confirm_{action}:{inbound}'))
         keyboard.add(types.InlineKeyboardButton(text='🔙 Back', callback_data='cancel'))
         return keyboard
 

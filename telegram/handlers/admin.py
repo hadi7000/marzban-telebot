@@ -280,6 +280,26 @@ def add_time_step(message):
     schedule_delete_message(message.chat.id, msg.id)
 
 
+@bot.callback_query_handler(cb_query_startswith("inbound"), is_admin=True)
+def inbound_command(call: types.CallbackQuery):
+    bot.edit_message_text(
+        f"Select inbound to *{call.data[8:].title()}* from all users",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="markdown",
+        reply_markup=BotKeyboard.inbounds_menu(call.data, xray.config.inbounds_by_tag))
+
+
+@bot.callback_query_handler(cb_query_startswith("confirm_inbound"), is_admin=True)
+def delete_expired_command(call: types.CallbackQuery):
+    bot.edit_message_text(
+        f"⚠️ Are you sure? This will *{call.data[16:].replace(':', ' ')} for All Users*‼️",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="markdown",
+        reply_markup=BotKeyboard.confirm_action(action=call.data[8:]))
+
+
 @bot.callback_query_handler(cb_query_startswith("edit:"), is_admin=True)
 def edit_command(call: types.CallbackQuery):
     bot.clear_step_handler_by_chat_id(call.message.chat.id)
@@ -1586,14 +1606,14 @@ f'{user.username}\
 \t{user.status}\n')
                     except: pass
             bot.edit_message_text(
-                f'✅ <b>{data[8:].title()} Users Deleted</b>',
+                f'✅ <b>{data[7:].title()} Users Deleted</b>',
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode="HTML",
                 reply_markup=BotKeyboard.main_menu())
             if TELEGRAM_LOGGER_CHANNEL_ID:
                 text = f'''\
-🗑 <b>#Delete #{data[8:].title()} #From_Bot</b>
+🗑 <b>#Delete #{data[7:].title()} #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Count:</b> <code>{deleted}</code>
 ➖➖➖➖➖➖➖➖➖
@@ -1678,6 +1698,55 @@ f'{user.username}\
                 try:
                     bot.send_document(TELEGRAM_LOGGER_CHANNEL_ID, open(file_name, 'rb'), caption=text, parse_mode='HTML')
                     os.remove(file_name)
+                except:
+                    pass
+    elif data in ['inbound_add', 'inbound_remove']:
+        inbound = call.data.split(":")[2]
+        with GetDB() as db:
+            users = crud.get_users(db)
+            for user in users:
+                inbounds = [j for i in user.inbounds for j in user.inbounds[i]]
+                protocol = xray.config.inbounds_by_tag[inbound]['protocol']
+                new_inbounds = user.inbounds
+                if data == 'inbound_add':
+                    if inbound not in inbounds:
+                        if protocol in list(new_inbounds.keys()):
+                            new_inbounds[protocol].append(inbound)
+                        else:
+                            new_inbounds[protocol] = [inbound]
+                        crud.update_user(db, user, UserModify(inbounds=new_inbounds))
+                        if user.status == UserStatus.active:
+                            xray.operations.update_user(user)
+                        else:
+                            xray.operations.remove_user(user)
+                elif data == 'inbound_remove':
+                    if inbound in inbounds:
+                        if len(new_inbounds[protocol]) == 1:
+                            del new_inbounds[protocol]
+                        else:
+                            new_inbounds[protocol].remove(inbound)
+                        user = crud.update_user(db, user, UserModify(inbounds=new_inbounds))
+                        if user.status == UserStatus.active:
+                            xray.operations.update_user(user)
+                        else:
+                            xray.operations.remove_user(user)
+            
+            bot.edit_message_text(
+                f'✅ <b>{data[8:].title()}</b> <code>{inbound}</code> <b>Users Successfully</b>',
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=BotKeyboard.main_menu())
+
+            if TELEGRAM_LOGGER_CHANNEL_ID:
+                text = f'''\
+✏️ <b>#Modified #Inbound_{data[8:].title()} #From_Bot</b>
+➖➖➖➖➖➖➖➖➖
+<b>Inbound:</b> <code>{inbound}</code> 
+➖➖➖➖➖➖➖➖➖
+<b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
+                try:
+                    bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, 'HTML')
                 except:
                     pass
 
