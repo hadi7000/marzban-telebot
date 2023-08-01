@@ -1705,31 +1705,32 @@ f'{user.username}\
         with GetDB() as db:
             users = crud.get_users(db)
             for user in users:
-                inbounds = [j for i in user.inbounds for j in user.inbounds[i]]
+                inbound_tags = [j for i in user.inbounds for j in user.inbounds[i]]
                 protocol = xray.config.inbounds_by_tag[inbound]['protocol']
                 new_inbounds = user.inbounds
                 if data == 'inbound_add':
-                    if inbound not in inbounds:
+                    if inbound not in inbound_tags:
                         if protocol in list(new_inbounds.keys()):
                             new_inbounds[protocol].append(inbound)
                         else:
                             new_inbounds[protocol] = [inbound]
-                        crud.update_user(db, user, UserModify(inbounds=new_inbounds))
-                        if user.status == UserStatus.active:
-                            xray.operations.update_user(user)
-                        else:
-                            xray.operations.remove_user(user)
                 elif data == 'inbound_remove':
-                    if inbound in inbounds:
+                    if inbound in inbound_tags:
                         if len(new_inbounds[protocol]) == 1:
                             del new_inbounds[protocol]
                         else:
                             new_inbounds[protocol].remove(inbound)
-                        user = crud.update_user(db, user, UserModify(inbounds=new_inbounds))
-                        if user.status == UserStatus.active:
-                            xray.operations.update_user(user)
-                        else:
-                            xray.operations.remove_user(user)
+                if (data == 'inbound_remove' and inbound in inbound_tags)\
+                    or (data == 'inbound_add' and inbound not in inbound_tags):
+                    proxies = {p.type.value: p.settings for p in user.proxies}
+                    for protocol in xray.config.inbounds_by_protocol:
+                        if protocol in new_inbounds and protocol not in user.inbounds:
+                            proxies.update({protocol: {}})
+                        elif protocol in user.inbounds and protocol not in new_inbounds:
+                            del proxies[protocol]
+                    user = crud.update_user(db, user, UserModify(inbounds=new_inbounds, proxies=proxies))
+                    if user.status == UserStatus.active:
+                        xray.operations.update_user(user)
             
             bot.edit_message_text(
                 f'✅ <b>{data[8:].title()}</b> <code>{inbound}</code> <b>Users Successfully</b>',
