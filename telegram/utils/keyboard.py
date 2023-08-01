@@ -35,10 +35,11 @@ class BotKeyboard:
     @staticmethod
     def edit_all_menu():
         keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton(text='🗑 Delete Depleted', callback_data='delete_depleted'))
-        keyboard.add(types.InlineKeyboardButton(text='🔋 Change Data', callback_data='add_data'))
-        keyboard.add(types.InlineKeyboardButton(text='📅 Change Time', callback_data='add_time'))
-        keyboard.add(types.InlineKeyboardButton(text='🔙 Back', callback_data='cancel'))
+        keyboard.add(
+            types.InlineKeyboardButton(text='🗑 Delete Expired', callback_data='delete_expired'),
+            types.InlineKeyboardButton(text='🗑 Delete Limited', callback_data='delete_limited'))
+        keyboard.add(types.InlineKeyboardButton(text='🔋 Change Data', callback_data='add_data'),
+                     types.InlineKeyboardButton(text='📅 Change Time', callback_data='add_time'))
         return keyboard
 
 

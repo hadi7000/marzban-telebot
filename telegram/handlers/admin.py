@@ -183,14 +183,24 @@ def edit_all_command(call: types.CallbackQuery):
     )
 
 
-@bot.callback_query_handler(cb_query_equals('delete_depleted'), is_admin=True)
-def delete_depleted_command(call: types.CallbackQuery):
+@bot.callback_query_handler(cb_query_equals('delete_expired'), is_admin=True)
+def delete_expired_command(call: types.CallbackQuery):
     bot.edit_message_text(
-        f"⚠️ Are you sure? This will *DELETE All DEPLETED Users*‼️",
+        f"⚠️ Are you sure? This will *DELETE All Expired Users*‼️",
         call.message.chat.id,
         call.message.message_id,
         parse_mode="markdown",
-        reply_markup=BotKeyboard.confirm_action(action="delete_depleted"))
+        reply_markup=BotKeyboard.confirm_action(action="delete_expired"))
+
+
+@bot.callback_query_handler(cb_query_equals('delete_limited'), is_admin=True)
+def delete_limited_command(call: types.CallbackQuery):
+    bot.edit_message_text(
+        f"⚠️ Are you sure? This will *DELETE All Limited Users*‼️",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="markdown",
+        reply_markup=BotKeyboard.confirm_action(action="delete_limited"))
 
 
 @bot.callback_query_handler(cb_query_equals('add_data'), is_admin=True)
@@ -1510,10 +1520,10 @@ def confirm_user_command(call: types.CallbackQuery):
             except:
                 pass
 
-    elif data == 'delete_depleted':
+    elif data in ['delete_expired', 'delete_limited']:
         with GetDB() as db:
-            depleted_users = crud.get_users(db, status=[UserStatus.limited, UserStatus.expired])
-            file_name = f'depleted_users_{int(now.timestamp()*1000)}.txt'
+            depleted_users = crud.get_users(db, status=[UserStatus.limited if data == 'delete_limited' else UserStatus.expired])
+            file_name = f'{data[8:]}_users_{int(now.timestamp()*1000)}.txt'
             with open(file_name, 'w') as f:
                 f.write('USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n')
                 deleted = 0
@@ -1530,14 +1540,14 @@ f'{user.username}\
 \t{user.status}\n')
                     except: pass
             bot.edit_message_text(
-                '✅ <b>Depleted Users Deleted</b>',
+                f'✅ <b>{data[8:].title()} Users Deleted</b>',
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode="HTML",
                 reply_markup=BotKeyboard.main_menu())
             if TELEGRAM_LOGGER_CHANNEL_ID:
                 text = f'''\
-🗑 <b>#Delete #Depleted #From_Bot</b>
+🗑 <b>#Delete #{data[8:].title()} #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Count:</b> <code>{deleted}</code>
 ➖➖➖➖➖➖➖➖➖
