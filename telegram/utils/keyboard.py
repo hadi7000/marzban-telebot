@@ -101,6 +101,10 @@ class BotKeyboard:
         )
         keyboard.add(
             types.InlineKeyboardButton(
+                text='🔁 Reset usage',
+                callback_data=f"reset_usage:{user_info['username']}"
+            ),
+            types.InlineKeyboardButton(
                 text='♻️ Charge',
                 callback_data=f"charge:{user_info['username']}"
             )

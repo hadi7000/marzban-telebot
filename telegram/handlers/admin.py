@@ -160,6 +160,19 @@ def activate_user_command(call: types.CallbackQuery):
     )
 
 
+@bot.callback_query_handler(cb_query_startswith("reset_usage:"), is_admin=True)
+def reset_usage_user_command(call: types.CallbackQuery):
+    username = call.data.split(":")[1]
+    bot.edit_message_text(
+        f"⚠️ Are you sure? This will Reset Usage of user `{username}`.",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="markdown",
+        reply_markup=BotKeyboard.confirm_action(
+            action="reset_usage", username=username),
+    )
+
+
 @bot.callback_query_handler(cb_query_equals('edit_all'), is_admin=True)
 def edit_all_command(call: types.CallbackQuery):
     with GetDB() as db:
@@ -1217,6 +1230,39 @@ def confirm_user_command(call: types.CallbackQuery):
         if TELEGRAM_LOGGER_CHANNEL_ID:
             text = f'''\
 ✅ <b>#Activated  #From_Bot</b>
+➖➖➖➖➖➖➖➖➖
+<b>Username</b> : <code>{username}</code>
+➖➖➖➖➖➖➖➖➖
+<b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
+            try:
+                bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, 'HTML')
+            except:
+                pass
+    elif data == 'reset_usage':
+        username = call.data.split(":")[2]
+        with GetDB() as db:
+            db_user = crud.get_user(db, username)
+            crud.reset_user_data_usage(db, db_user)
+            user = UserResponse.from_orm(db_user)
+        bot.edit_message_text(
+            get_user_info_text(
+                status=user.status,
+                username=username,
+                sub_url=user.subscription_url,
+                data_limit=user.data_limit,
+                usage=user.used_traffic,
+                expire=user.expire
+            ),
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='HTML',
+            reply_markup=BotKeyboard.user_menu(user_info={
+                'status': user.status,
+                'username': user.username
+            }))
+        if TELEGRAM_LOGGER_CHANNEL_ID:
+            text = f'''\
+🔁 <b>#Reset_usage  #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Username</b> : <code>{username}</code>
 ➖➖➖➖➖➖➖➖➖
