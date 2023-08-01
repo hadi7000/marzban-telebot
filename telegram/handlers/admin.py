@@ -164,14 +164,16 @@ def activate_user_command(call: types.CallbackQuery):
 def edit_all_command(call: types.CallbackQuery):
     with GetDB() as db:
         total_users = crud.get_users_count(db)
-        users_active = crud.get_users_count(db, UserStatus.active)
-        text = '''
+        active_users = crud.get_users_count(db, UserStatus.active)
+        disabled_users = crud.get_users_count(db, UserStatus.disabled)
+        exipred_users = crud.get_users_count(db, UserStatus.expired)
+        limited_users = crud.get_users_count(db, UserStatus.limited)
+        text = f'''
 👥 *Total Users*: `{total_users}`
-🟢 *Active Users*: `{active_users}`
-🔴 *Deactivate Users*: `{deactivate_users}`'''.format(
-        total_users=total_users,
-        active_users=users_active,
-        deactivate_users=total_users - users_active)
+✅ *Active Users*: `{active_users}`
+❌ *Disabled Users*: `{disabled_users}`
+🕰 *Expired Users*: `{exipred_users}`
+📵 *Limited Users*: `{limited_users}`'''
     return bot.edit_message_text(
         text,
         call.message.chat.id,
@@ -189,6 +191,70 @@ def delete_depleted_command(call: types.CallbackQuery):
         call.message.message_id,
         parse_mode="markdown",
         reply_markup=BotKeyboard.confirm_action(action="delete_depleted"))
+
+
+@bot.callback_query_handler(cb_query_equals('add_data'), is_admin=True)
+def add_data_command(call: types.CallbackQuery):
+    msg = bot.edit_message_text(
+        f"🔋 Enter Data Limit to increase or decrease (GB):",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=BotKeyboard.inline_cancel_action())
+    schedule_delete_message(call.message.chat.id, call.message.id)
+    schedule_delete_message(call.message.chat.id, msg.id)
+    return bot.register_next_step_handler(call.message, add_data_step)
+
+
+def add_data_step(message):
+    try:
+        data_limit = float(message.text)
+        if not data_limit:
+            raise ValueError
+    except ValueError:
+        wait_msg = bot.send_message(message.chat.id, '❌ Data limit must be a number and not zero.')
+        schedule_delete_message(message.chat.id, wait_msg.message_id)
+        return bot.register_next_step_handler(wait_msg, add_data_step)
+    schedule_delete_message(message.chat.id, message.message_id)
+    msg = bot.send_message(
+        message.chat.id,
+        f"⚠️ Are you sure? this will change Data limit of all users according to <b>"\
+            f"{'+' if data_limit > 0 else '-'}{readable_size(abs(data_limit *1024*1024*1024))}</b>",
+        parse_mode="html",
+        reply_markup=BotKeyboard.confirm_action('add_data', data_limit))
+    cleanup_messages(message.chat.id)
+    schedule_delete_message(message.chat.id, msg.id)
+
+
+
+@bot.callback_query_handler(cb_query_equals('add_time'), is_admin=True)
+def add_time_command(call: types.CallbackQuery):
+    msg = bot.edit_message_text(
+        f"📅 Enter Days to increase or decrease expiry:",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=BotKeyboard.inline_cancel_action())
+    schedule_delete_message(call.message.chat.id, call.message.id)
+    schedule_delete_message(call.message.chat.id, msg.id)
+    return bot.register_next_step_handler(call.message, add_time_step)
+
+
+def add_time_step(message):
+    try:
+        days = int(message.text)
+        if not days:
+            raise ValueError
+    except ValueError:
+        wait_msg = bot.send_message(message.chat.id, '❌ Days must be as a number and not zero.')
+        schedule_delete_message(message.chat.id, wait_msg.message_id)
+        return bot.register_next_step_handler(wait_msg, add_time_step)
+    schedule_delete_message(message.chat.id, message.message_id)
+    msg = bot.send_message(
+        message.chat.id,
+        f"⚠️ Are you sure? this will change Expiry Time of all users according to <b>{days} Days</b>",
+        parse_mode="html",
+        reply_markup=BotKeyboard.confirm_action('add_time', days))
+    cleanup_messages(message.chat.id)
+    schedule_delete_message(message.chat.id, msg.id)
 
 
 @bot.callback_query_handler(cb_query_startswith("edit:"), is_admin=True)
@@ -1447,22 +1513,22 @@ def confirm_user_command(call: types.CallbackQuery):
     elif data == 'delete_depleted':
         with GetDB() as db:
             depleted_users = crud.get_users(db, status=[UserStatus.limited, UserStatus.expired])
-            file_name = f'depleted_users_{int(now.timestamp())}.txt'
+            file_name = f'depleted_users_{int(now.timestamp()*1000)}.txt'
             with open(file_name, 'w') as f:
-                f.write('USERNAME\tEXIPRY\t\t\tUSAGE/LIMIT\t\tSTATUS\n')
+                f.write('USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n')
                 deleted = 0
                 for user in depleted_users:
                     try:
                         crud.remove_user(db, user)
                         xray.operations.remove_user(user)
                         deleted +=1
-                    except: pass
-                    f.write(\
+                        f.write(\
 f'{user.username}\
 \t{datetime.fromtimestamp(user.expire) if user.expire else "never"}\
 \t{readable_size(user.used_traffic) if user.used_traffic else 0}\
 /{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
 \t{user.status}\n')
+                    except: pass
             bot.edit_message_text(
                 '✅ <b>Depleted Users Deleted</b>',
                 call.message.chat.id,
@@ -1474,6 +1540,83 @@ f'{user.username}\
 🗑 <b>#Delete #Depleted #From_Bot</b>
 ➖➖➖➖➖➖➖➖➖
 <b>Count:</b> <code>{deleted}</code>
+➖➖➖➖➖➖➖➖➖
+<b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
+                try:
+                    bot.send_document(TELEGRAM_LOGGER_CHANNEL_ID, open(file_name, 'rb'), caption=text, parse_mode='HTML')
+                    os.remove(file_name)
+                except:
+                    pass
+    elif data == 'add_data':
+        data_limit = float(call.data.split(":")[2]) * 1024 * 1024 * 1024
+        with GetDB() as db:
+            users = crud.get_users(db)
+            counter = 0
+            file_name = f'new_data_limit_users_{int(now.timestamp()*1000)}.txt'
+            with open(file_name, 'w') as f:
+                f.write('USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n')
+                for user in users:
+                    if user.data_limit and user.status not in [UserStatus.limited, UserStatus.expired]:
+                        user = crud.update_user(db, user, UserModify(data_limit=(user.data_limit + data_limit)))
+                        counter += 1
+                        f.write(\
+f'{user.username}\
+\t{datetime.fromtimestamp(user.expire) if user.expire else "never"}\
+\t{readable_size(user.used_traffic) if user.used_traffic else 0}\
+/{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
+\t{user.status}\n')
+            cleanup_messages(chat_id)
+            bot.send_message(
+                chat_id,
+                f'✅ <b>{counter} Users</b> Data Limit according to <code>{"+" if data_limit > 0 else "-"}{readable_size(abs(data_limit))}</code>',
+                'HTML',
+                reply_markup=BotKeyboard.main_menu())
+            if TELEGRAM_LOGGER_CHANNEL_ID:
+                text = f'''\
+📶 <b>#Traffic_Change #From_Bot</b>
+➖➖➖➖➖➖➖➖➖
+<b>According to:</b> <code>{"+" if data_limit > 0 else "-"}{readable_size(abs(data_limit))}</code>
+<b>Count:</b> <code>{counter}</code>
+➖➖➖➖➖➖➖➖➖
+<b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
+                try:
+                    bot.send_document(TELEGRAM_LOGGER_CHANNEL_ID, open(file_name, 'rb'), caption=text, parse_mode='HTML')
+                    os.remove(file_name)
+                except:
+                    pass
+
+    elif data == 'add_time':
+        days = int(call.data.split(":")[2])
+        with GetDB() as db:
+            users = crud.get_users(db)
+            counter = 0
+            file_name = f'new_expiry_users_{int(now.timestamp()*1000)}.txt'
+            with open(file_name, 'w') as f:
+                f.write('USERNAME\tEXIPRY\tUSAGE/LIMIT\tSTATUS\n')
+                for user in users:
+                    if user.expire and user.status not in [UserStatus.limited, UserStatus.expired]:
+                        user = crud.update_user(
+                            db, user,
+                            UserModify(expire=int((datetime.fromtimestamp(user.expire) + relativedelta(days=days)).timestamp())))
+                        counter += 1
+                        f.write(\
+f'{user.username}\
+\t{datetime.fromtimestamp(user.expire) if user.expire else "never"}\
+\t{readable_size(user.used_traffic) if user.used_traffic else 0}\
+/{readable_size(user.data_limit) if user.data_limit else "Unlimited"}\
+\t{user.status}\n')
+            cleanup_messages(chat_id)
+            bot.send_message(
+                chat_id,
+                f'✅ <b>{counter} Users</b> Expiry Changes according to {days} Days',
+                'HTML',
+                reply_markup=BotKeyboard.main_menu())
+            if TELEGRAM_LOGGER_CHANNEL_ID:
+                text = f'''\
+📅 <b>#Expiry_Change #From_Bot</b>
+➖➖➖➖➖➖➖➖➖
+<b>According to:</b> <code>{days} Days</code>
+<b>Count:</b> <code>{counter}</code>
 ➖➖➖➖➖➖➖➖➖
 <b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
                 try:
