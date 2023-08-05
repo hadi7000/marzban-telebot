@@ -1427,7 +1427,8 @@ def confirm_user_command(call: types.CallbackQuery):
 
             for protocol in xray.config.inbounds_by_protocol:
                 if protocol in inbounds and protocol not in db_user.inbounds:
-                    proxies.update({protocol: {}})
+                    proxies.update({protocol: {'flow': TELEGRAM_DEFAULT_VLESS_XTLS_FLOW} if \
+                                    TELEGRAM_DEFAULT_VLESS_XTLS_FLOW and protocol == ProxyTypes.VLESS else {}})
                 elif protocol in db_user.inbounds and protocol not in inbounds:
                     del proxies[protocol]
 
@@ -1617,7 +1618,7 @@ f'{user.username}\
                     except:
                         db.rollback()
             bot.edit_message_text(
-                f'✅ <code>{deleted}</code> <b>{data[7:].title()} Users Deleted</b>',
+                f'✅ <code>{deleted}</code>/<code>{len(depleted_users)}</code> <b>{data[7:].title()} Users Deleted</b>',
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode="HTML",
@@ -1661,7 +1662,7 @@ f'{user.username}\
             cleanup_messages(chat_id)
             bot.send_message(
                 chat_id,
-                f'✅ <b>{counter} Users</b> Data Limit according to <code>{"+" if data_limit > 0 else "-"}{readable_size(abs(data_limit))}</code>',
+                f'✅ <b>{counter}/{len(users)} Users</b> Data Limit according to <code>{"+" if data_limit > 0 else "-"}{readable_size(abs(data_limit))}</code>',
                 'HTML',
                 reply_markup=BotKeyboard.main_menu())
             if TELEGRAM_LOGGER_CHANNEL_ID:
@@ -1707,7 +1708,7 @@ f'{user.username}\
             cleanup_messages(chat_id)
             bot.send_message(
                 chat_id,
-                f'✅ <b>{counter} Users</b> Expiry Changes according to {days} Days',
+                f'✅ <b>{counter}/{len(users)} Users</b> Expiry Changes according to {days} Days',
                 'HTML',
                 reply_markup=BotKeyboard.main_menu())
             if TELEGRAM_LOGGER_CHANNEL_ID:
@@ -1732,6 +1733,7 @@ f'{user.username}\
         inbound = call.data.split(":")[2]
         with GetDB() as db:
             users = crud.get_users(db)
+            unsuccessful = 0
             for user in users:
                 inbound_tags = [j for i in user.inbounds for j in user.inbounds[i]]
                 protocol = xray.config.inbounds_by_tag[inbound]['protocol']
@@ -1753,7 +1755,8 @@ f'{user.username}\
                     proxies = {p.type.value: p.settings for p in user.proxies}
                     for protocol in xray.config.inbounds_by_protocol:
                         if protocol in new_inbounds and protocol not in user.inbounds:
-                            proxies.update({protocol: {}})
+                            proxies.update({protocol: {'flow': TELEGRAM_DEFAULT_VLESS_XTLS_FLOW} if \
+                                            TELEGRAM_DEFAULT_VLESS_XTLS_FLOW and protocol == ProxyTypes.VLESS else {}})
                         elif protocol in user.inbounds and protocol not in new_inbounds:
                             del proxies[protocol]
                     try:
@@ -1762,9 +1765,11 @@ f'{user.username}\
                             xray.operations.update_user(user)
                     except:
                         db.rollback()
+                        unsuccessful += 1
             
             bot.edit_message_text(
-                f'✅ <b>{data[8:].title()}</b> <code>{inbound}</code> <b>Users Successfully</b>',
+                f'✅ <b>{data[8:].title()}</b> <code>{inbound}</code> <b>Users Successfully</b>'+\
+                    (f'\n Unsuccessful: <code>{unsuccessful}</code>' if unsuccessful else ''),
                 call.message.chat.id,
                 call.message.message_id,
                 parse_mode="HTML",
