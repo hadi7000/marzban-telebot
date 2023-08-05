@@ -482,7 +482,8 @@ def users_command(call: types.CallbackQuery):
 
 
 def get_user_info_text(
-        status: str, username: str,sub_url : str, data_limit: int = None, usage: int = None, expire: int = None) -> str:
+        status: str, username: str,sub_url : str, data_limit: int = None,
+        usage: int = None, expire: int = None, note: str = None) -> str:
     statuses = {
         'active': '✅',
         'expired': '🕰',
@@ -492,14 +493,16 @@ def get_user_info_text(
 ┌─{statuses[status]} <b>Status:</b> <code>{status.title()}</code>
 │          └─<b>Username:</b> <code>{username}</code>
 │
-├─🌐 <b>Data limit:</b> <code>{readable_size(data_limit) if data_limit else 'Unlimited'}</code>
+├─🔋 <b>Data limit:</b> <code>{readable_size(data_limit) if data_limit else 'Unlimited'}</code>
 │          └─<b>Data Used:</b> <code>{readable_size(usage) if usage else "-"}</code>
 │
 ├─📅 <b>Expiry Date:</b> <code>{datetime.fromtimestamp(expire).date() if expire else 'Never'}</code>
 │           └─<b>Days left:</b> <code>{(datetime.fromtimestamp(expire or 0) - datetime.now()).days if expire else '-'}</code>
 │
-└─🚀 <b><a href="{sub_url}">Subscription</a>:</b> <code>{sub_url}</code>
 '''
+    if note:
+        text += f'├─📝 <b>Note:</b> <code>{note}</code>\n│\n'
+    text += f'└─🚀 <b><a href="{sub_url}">Subscription</a>:</b> <code>{sub_url}</code>'
     return text
 
 
@@ -521,8 +524,72 @@ def get_template_info_text(
     return text
 
 
+@bot.callback_query_handler(cb_query_startswith('edit_note:'), is_admin=True)
+def edit_note_command(call: types.CallbackQuery):
+    username = call.data.split(':')[1]
+    with GetDB() as db:
+        db_user = crud.get_user(db, username)
+        if not db_user:
+            return bot.answer_callback_query(call.id, '❌ User not found.', show_alert=True)
+    schedule_delete_message(call.message.chat.id, call.message.id)
+    cleanup_messages(call.message.chat.id)
+    msg = bot.send_message(
+        call.message.chat.id,
+        f'<b>📝 Current Note:</b> <code>{db_user.note}</code>\n\nSend new Note for <code>{username}</code>',
+        parse_mode="HTML",
+        reply_markup=BotKeyboard.inline_cancel_action(f'user:{username}'))
+    mem_store.set(f'{call.message.chat.id}:username', username)
+    schedule_delete_message(call.message.chat.id, msg.id)
+    bot.register_next_step_handler(msg, edit_note_step)
+
+
+def edit_note_step(message: types.Message):
+    note = message.text or ''
+    if len(note) > 500:
+        wait_msg = bot.send_message(message.chat.id, '❌ Not can not be more than 500 characters.')
+        schedule_delete_message(message.chat.id, wait_msg.id)
+        schedule_delete_message(message.chat.id, message.id)
+        return bot.register_next_step_handler(wait_msg, edit_note_step)
+    with GetDB() as db:
+        username = mem_store.get(f'{message.chat.id}:username')
+        if not username:
+            cleanup_messages(message.chat.id)
+            bot.reply_to(message, '❌ Something went wrong!\n restart bot /start')
+        db_user = crud.get_user(db, username)
+        last_note = db_user.note
+        modify = UserModify(note=note)
+        db_user = crud.update_user(db, db_user, modify)
+        user = UserResponse.from_orm(db_user)
+        text = get_user_info_text(
+            status=user.status,
+            username=user.username,
+            sub_url=user.subscription_url,
+            expire=user.expire,
+            data_limit=user.data_limit,
+            usage=user.used_traffic,
+            note=note)
+        bot.reply_to(message, text, parse_mode="html", reply_markup=BotKeyboard.user_menu(user_info={
+            'status': user.status,
+            'username': user.username}, note=note))
+        if TELEGRAM_LOGGER_CHANNEL_ID:
+            text = f'''\
+📝 <b>#Edit_Note #From_Bot</b>
+➖➖➖➖➖➖➖➖➖
+<b>Username :</b> <code>{user.username}</code>
+<b>Last Note :</b> <code>{last_note}</code>
+<b>New Note :</b> <code>{user.note}</code>
+➖➖➖➖➖➖➖➖➖
+<b>By :</b> <a href="tg://user?id={message.chat.id}">{message.from_user.full_name}</a>'''
+            try:
+                bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, 'HTML')
+            except:
+                pass
+    
+
+
 @bot.callback_query_handler(cb_query_startswith('user:'), is_admin=True)
 def user_command(call: types.CallbackQuery):
+    bot.clear_step_handler_by_chat_id(call.message.chat.id)
     username = call.data.split(':')[1]
     page = int(call.data.split(':')[2]) if len(call.data.split(':')) > 2 else 1
     with GetDB() as db:
@@ -534,16 +601,28 @@ def user_command(call: types.CallbackQuery):
                 show_alert=True
             )
         user = UserResponse.from_orm(db_user)
-
+    try: note = user.note
+    except: note = None
     text = get_user_info_text(
         status=user.status, username=username, sub_url=user.subscription_url,
-        data_limit=user.data_limit, usage=user.used_traffic, expire=user.expire),
+        data_limit=user.data_limit, usage=user.used_traffic, expire=user.expire, note=note),
     bot.edit_message_text(
         text,
         call.message.chat.id, call.message.message_id, parse_mode="HTML",
         reply_markup=BotKeyboard.user_menu(
-            {'username': user.username, 'status': user.status, },
-            page=page))
+            {'username': user.username, 'status': user.status},
+            page=page, note=note))
+
+
+@bot.callback_query_handler(cb_query_startswith("revoke_sub:"), is_admin=True)
+def revoke_sub_command(call: types.CallbackQuery):
+    username = call.data.split(":")[1]
+    bot.edit_message_text(
+        f"⚠️ Are you sure? This will *Revoke Subscription* link for `{username}`‼️",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="markdown",
+        reply_markup=BotKeyboard.confirm_action(action=call.data))
 
 
 @bot.callback_query_handler(cb_query_startswith("links:"), is_admin=True)
@@ -653,7 +732,9 @@ def template_charge_command(call: types.CallbackQuery):
         if not db_user:
             return bot.answer_callback_query(call.id, "User not found!", show_alert=True)
         user = UserResponse.from_orm(db_user)
-        if (user.data_limit and not user.expire) or (not user.data_limit and user.expire):
+        if (user.data_limit and not user.expire) or (not user.data_limit and user.expire):  
+            try: note = user.note
+            except: note = None
             text = get_user_info_text(
                 status='active',
                 username=username,
@@ -662,7 +743,7 @@ def template_charge_command(call: types.CallbackQuery):
                             relativedelta(seconds=template.expire_duration)).timestamp()),
                 data_limit=(
                             user.data_limit - user.used_traffic + template.data_limit) if user.data_limit else template.data_limit,
-                usage=0)
+                usage=0, note=note)
             bot.edit_message_text(f'''\
 ‼️ <b>If add template <u>Bandwidth</u> and <u>Time</u> to the user, the user will be this</b>:\n\n\
 {text}\n\n\
@@ -683,14 +764,16 @@ def template_charge_command(call: types.CallbackQuery):
             )
             db_user = crud.update_user(db, db_user, modify)
             xray.operations.add_user(db_user)
-
+            
+            try: note = user.note
+            except: note = None
             text = get_user_info_text(
                 status='active',
                 username=username,
                 sub_url=user.subscription_url,
                 expire=int(expire_date.timestamp()),
                 data_limit=template.data_limit,
-                usage=0)
+                usage=0, note=note)
             bot.edit_message_text(
                 f'♻️ User Successfully Charged!\n\n{text}',
                 call.message.chat.id,
@@ -698,7 +781,7 @@ def template_charge_command(call: types.CallbackQuery):
                 parse_mode='html',
                 reply_markup=BotKeyboard.user_menu(user_info={
                     'status': 'active',
-                    'username': user.username}))
+                    'username': user.username}, note=note))
             if TELEGRAM_LOGGER_CHANNEL_ID:
                 text = f'''\
 ♻️ <b>#Charged #Reset #From_Bot</b>
@@ -722,6 +805,8 @@ def template_charge_command(call: types.CallbackQuery):
                 except:
                     pass
         else:
+            try: note = user.note
+            except: note = None
             text = get_user_info_text(
                 status='active',
                 username=username,
@@ -730,7 +815,7 @@ def template_charge_command(call: types.CallbackQuery):
                             relativedelta(seconds=template.expire_duration)).timestamp()),
                 data_limit=(
                             user.data_limit - user.used_traffic + template.data_limit) if user.data_limit else template.data_limit,
-                usage=0)
+                usage=0, note=note)
             bot.edit_message_text(f'''\
 ‼️ <b>If add template <u>Bandwidth</u> and <u>Time</u> to the user, the user will be this</b>:\n\n\
 {text}\n\n\
@@ -1201,6 +1286,8 @@ def confirm_user_command(call: types.CallbackQuery):
                 status=UserStatusModify.disabled))
             xray.operations.remove_user(db_user)
             user = UserResponse.from_orm(db_user)
+            try: note = user.note
+            except: note = None
         bot.edit_message_text(
             get_user_info_text(
                 status='disabled',
@@ -1208,7 +1295,8 @@ def confirm_user_command(call: types.CallbackQuery):
                 sub_url=user.subscription_url,
                 data_limit=db_user.data_limit,
                 usage=db_user.used_traffic,
-                expire=db_user.expire
+                expire=db_user.expire,
+                note=note
             ),
             call.message.chat.id,
             call.message.message_id,
@@ -1216,7 +1304,7 @@ def confirm_user_command(call: types.CallbackQuery):
             reply_markup=BotKeyboard.user_menu(user_info={
                 'status': 'disabled',
                 'username': db_user.username
-            }))
+            }, note=note))
         if TELEGRAM_LOGGER_CHANNEL_ID:
             text = f'''\
 ❌ <b>#Disabled  #From_Bot</b>
@@ -1236,6 +1324,8 @@ def confirm_user_command(call: types.CallbackQuery):
                 status=UserStatusModify.active))
             xray.operations.add_user(db_user)
             user = UserResponse.from_orm(db_user)
+            try: note = user.note
+            except: note = None
         bot.edit_message_text(
             get_user_info_text(
                 status='active',
@@ -1243,7 +1333,8 @@ def confirm_user_command(call: types.CallbackQuery):
                 sub_url=user.subscription_url,
                 data_limit=db_user.data_limit,
                 usage=db_user.used_traffic,
-                expire=db_user.expire
+                expire=db_user.expire,
+                note=note
             ),
             call.message.chat.id,
             call.message.message_id,
@@ -1251,7 +1342,7 @@ def confirm_user_command(call: types.CallbackQuery):
             reply_markup=BotKeyboard.user_menu(user_info={
                 'status': 'active',
                 'username': db_user.username
-            }))
+            }, note=note))
         if TELEGRAM_LOGGER_CHANNEL_ID:
             text = f'''\
 ✅ <b>#Activated  #From_Bot</b>
@@ -1269,6 +1360,8 @@ def confirm_user_command(call: types.CallbackQuery):
             db_user = crud.get_user(db, username)
             crud.reset_user_data_usage(db, db_user)
             user = UserResponse.from_orm(db_user)
+            try: note = user.note
+            except: note = None
         bot.edit_message_text(
             get_user_info_text(
                 status=user.status,
@@ -1276,7 +1369,8 @@ def confirm_user_command(call: types.CallbackQuery):
                 sub_url=user.subscription_url,
                 data_limit=user.data_limit,
                 usage=user.used_traffic,
-                expire=user.expire
+                expire=user.expire,
+                note=note
             ),
             call.message.chat.id,
             call.message.message_id,
@@ -1284,7 +1378,7 @@ def confirm_user_command(call: types.CallbackQuery):
             reply_markup=BotKeyboard.user_menu(user_info={
                 'status': user.status,
                 'username': user.username
-            }))
+            }, note=note))
         if TELEGRAM_LOGGER_CHANNEL_ID:
             text = f'''\
 🔁 <b>#Reset_usage  #From_Bot</b>
@@ -1352,14 +1446,17 @@ def confirm_user_command(call: types.CallbackQuery):
                 )
             db_user = crud.update_user(db, db_user, modify)
             xray.operations.add_user(db_user)
-
+            
+            try: note = user.note
+            except: note = None
             text = get_user_info_text(
                 status=db_user.status,
                 username=username,
                 sub_url=user.subscription_url,
                 expire=db_user.expire,
                 data_limit=db_user.data_limit,
-                usage=db_user.used_traffic)
+                usage=db_user.used_traffic,
+                note=note)
 
             bot.edit_message_text(
                 f'♻️ User Successfully Charged!\n\n{text}',
@@ -1369,7 +1466,7 @@ def confirm_user_command(call: types.CallbackQuery):
                 reply_markup=BotKeyboard.user_menu(user_info={
                     'status': user.status,
                     'username': user.username
-                }))
+                }, note=note))
             if TELEGRAM_LOGGER_CHANNEL_ID:
                 text = f'''\
 ♻️ <b>#Charged #{data.split('_')[1].title()} #From_Bot</b>
@@ -1449,13 +1546,17 @@ def confirm_user_command(call: types.CallbackQuery):
             xray.operations.remove_user(db_user)
 
         bot.answer_callback_query(call.id, "✅ User updated successfully.")
+        
+        try: note = user.note
+        except: note = None
         text = get_user_info_text(
             status=user.status,
             username=user.username,
             sub_url=user.subscription_url,
             data_limit=user.data_limit,
             usage=user.used_traffic,
-            expire=user.expire
+            expire=user.expire,
+            note=note
         )
         bot.edit_message_text(
             text,
@@ -1464,7 +1565,8 @@ def confirm_user_command(call: types.CallbackQuery):
             parse_mode="HTML",
             reply_markup=BotKeyboard.user_menu({
                 'username': db_user.username,
-                'status': db_user.status})
+                'status': db_user.status},
+                note=note)
         )
         if TELEGRAM_LOGGER_CHANNEL_ID:
             tag = f'\n➖➖➖➖➖➖➖➖➖ \n<b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'
@@ -1561,20 +1663,23 @@ def confirm_user_command(call: types.CallbackQuery):
 
         xray.operations.add_user(db_user)
 
+        try: note = user.note
+        except: note = None
         text = get_user_info_text(
             status=user.status,
             username=user.username,
             sub_url=user.subscription_url,
             data_limit=user.data_limit,
             usage=user.used_traffic,
-            expire=user.expire
+            expire=user.expire,
+            note=note
         )
         bot.edit_message_text(
             text,
             call.message.chat.id,
             call.message.message_id,
             parse_mode="HTML",
-            reply_markup=BotKeyboard.user_menu(user_info={'status': user.status, 'username': user.username}))
+            reply_markup=BotKeyboard.user_menu(user_info={'status': user.status, 'username': user.username}, note=note))
 
         if TELEGRAM_LOGGER_CHANNEL_ID:
             text = f'''\
@@ -1787,6 +1892,43 @@ f'{user.username}\
                 except:
                     pass
 
+    elif data == 'revoke_sub':
+        username = call.data.split(":")[2]
+        with GetDB() as db:
+            db_user = crud.get_user(db, username)
+            if not db_user:
+                return bot.answer_callback_query(call.id, text=f"User not found!", show_alert=True)
+            db_user = crud.revoke_user_sub(db, db_user)
+            user = UserResponse.from_orm(db_user)
+            try: note = user.note
+            except: note = None
+        text = get_user_info_text(
+            status=user.status,
+            username=user.username,
+            sub_url=user.subscription_url,
+            expire=user.expire,
+            data_limit=user.data_limit,
+            usage=user.used_traffic,
+            note=note)
+        bot.edit_message_text(
+                f'✅ Subscription Successfully Revoked!\n\n{text}',
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=BotKeyboard.user_menu(user_info={'status': user.status, 'username': user.username}, note=note))
+
+        if TELEGRAM_LOGGER_CHANNEL_ID:
+                text = f'''\
+🚫 <b>#Revoke_sub #From_Bot</b>
+➖➖➖➖➖➖➖➖➖
+<b>Username:</b> <code>{username}</code> 
+➖➖➖➖➖➖➖➖➖
+<b>By :</b> <a href="tg://user?id={chat_id}">{full_name}</a>'''
+                try:
+                    bot.send_message(TELEGRAM_LOGGER_CHANNEL_ID, text, 'HTML')
+                except:
+                    pass
+
 
 @bot.message_handler(func=lambda message: True, is_admin=True)
 def search(message: types.Message):
@@ -1795,14 +1937,17 @@ def search(message: types.Message):
         if not db_user:
             return bot.reply_to(message, '❌ User not found.')
         user = UserResponse.from_orm(db_user)
+        try: note = user.note
+        except: note = None
     text = get_user_info_text(
         status=user.status,
         username=user.username,
         sub_url=user.subscription_url,
         expire=user.expire,
         data_limit=user.data_limit,
-        usage=user.used_traffic)
+        usage=user.used_traffic,
+        note=note)
     return bot.reply_to(message, text, parse_mode="html", reply_markup=BotKeyboard.user_menu(user_info={
         'status': user.status,
         'username': user.username
-    }))
+    }, note=note))
